@@ -138,6 +138,22 @@ def render_markdown(result: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Candidate coverage",
+            "",
+            "| Cutoff | Fixed-size Hit@k | Structure-aware Hit@k | SAC - fixed |",
+            "|---:|---:|---:|---:|",
+        ]
+    )
+    for k in result["cutoffs"]:
+        metric = f"hit@{k}"
+        lines.append(
+            f"| {k} | {fixed[metric]:.4f} | {structure[metric]:.4f} | "
+            f"{paired[metric]['mean_difference']:+.4f} |"
+        )
+
+    lines.extend(
+        [
+            "",
             "## Hit@5 per bagian",
             "",
             "| Bagian | N | Fixed-size | Structure-aware |",
