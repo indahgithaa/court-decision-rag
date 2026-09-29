@@ -132,12 +132,18 @@ def _draft_identity(section: Mapping[str, Any], name: str) -> QuestionDraft:
 
 def _draft_detention(section: Mapping[str, Any], name: str) -> QuestionDraft:
     text = str(section["section_text"])
+    detention_marker = re.search(r"\bditahan\b", text, flags=re.IGNORECASE)
+    search_offset = detention_marker.start() if detention_marker else 0
+    detention_text = text[search_offset:]
     match = re.search(
         r"(?:\d+\.\s*)?Penyidik(?!\s+Perpanjangan)[^;]{0,100}?"
-        r"sejak\s+tanggal\s+[^;]{1,80}?sampai\s+dengan\s+tanggal\s+[^;.]{1,60}[;.]?",
-        text,
+        r"sejak\s+tanggal\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}\s+"
+        r"sampai\s+dengan\s+tanggal\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}[;.]?",
+        detention_text,
         flags=re.IGNORECASE,
     )
+    if match:
+        match = _shift_match(match, text, search_offset)
     if not match:
         match = re.search(
             r"Terdakwa[^;]{0,220}?(?:ditahan|ditangkap)[^;]{0,220}[;.]",
@@ -153,7 +159,7 @@ def _draft_detention(section: Mapping[str, Any], name: str) -> QuestionDraft:
             "Kapan masa penahanan pada tingkat penyidikan untuk perkara "
             f"{name} dimulai dan berakhir?"
         ),
-        answer=_clean(match.group(0)).rstrip(";"),
+        answer=_strip_item_number(_clean(match.group(0)).rstrip(";")),
         difficulty="easy",
         rule="detention.investigator_period",
     )
@@ -180,8 +186,8 @@ def _draft_facts(section: Mapping[str, Any], name: str) -> QuestionDraft:
         section,
         match,
         question=(
-            "Perbuatan pidana apa yang didakwakan kepada "
-            f"{name} dalam uraian fakta perkara?"
+            "Perbuatan apa yang disebut dalam uraian dakwaan awal terhadap "
+            f"{name}?"
         ),
         answer=_clean(match.group(0)).strip(" ,\"“”�"),
         difficulty="medium",
@@ -191,32 +197,73 @@ def _draft_facts(section: Mapping[str, Any], name: str) -> QuestionDraft:
 
 def _draft_reasoning(section: Mapping[str, Any], name: str) -> QuestionDraft:
     text = str(section["section_text"])
-    search_area = text[: min(len(text), 9000)]
-    match = re.search(
-        r"Menimbang,?\s+bahwa\s+Terdakwa\s+telah\s+didakwa[^;]{30,1200}?"
-        r"(?:Pasal|pasal)[^;]{5,400}?;",
-        search_area,
-        flags=re.IGNORECASE | re.DOTALL,
+    selected_patterns = (
+        r"(?:memilih\s+(?:langsung|salah\s+satu)[^;]{0,900}?(?:Pasal|pasal)[^;]{0,500})",
+        r"(?:mempertimbangkan\s+(?:terlebih\s+dahulu|dahulu)[^;]{0,700}?(?:Pasal|pasal)[^;]{0,500})",
+        r"(?:dakwaan\s+yang\s+berbentuk\s+tunggal[^;]{0,400}?(?:Pasal|pasal)[^;]{0,400})",
     )
-    if not match:
-        matches = list(
+    selected: re.Match[str] | None = None
+    for pattern in selected_patterns:
+        selected = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if selected:
+            break
+    if selected is None:
+        closing = list(
             re.finditer(
-                r"(?:Memperhatikan|Mengingat),?[^;]{0,700}?(?:Pasal|pasal)[^;]*;?",
+                r"(?:Memperhatikan|Mengingat),?[^;]{0,900}?(?:Pasal|pasal)[^;]*;?",
                 text,
                 flags=re.IGNORECASE | re.DOTALL,
             )
         )
-        match = matches[-1] if matches else None
-    if not match:
+        selected = closing[-1] if closing else None
+    if selected is None:
         raise ValueError("Reasoning section has no recognizable selected charge or statute")
+
+    selected_text = selected.group(0)
+    article = re.search(r"\bPasal\b", selected_text, flags=re.IGNORECASE)
+    narcotics_ends = list(
+        re.finditer(r"tentang\s+Narkotika", selected_text, flags=re.IGNORECASE)
+    )
+    if article and narcotics_ends:
+        local_start = article.start()
+        local_end = narcotics_ends[-1].end()
+    else:
+        local_start = 0
+        local_end = len(selected_text)
+    match = _SpanMatch(
+        text=text,
+        start_position=selected.start() + local_start,
+        end_position=selected.start() + local_end,
+    )
+    if "halaman" in match.group(0).lower():
+        clean_closing = list(
+            re.finditer(
+                r"(?:Memperhatikan|Mengingat),?[^;]{0,900}?(?:Pasal|pasal)[^;]*;?",
+                text,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+        )
+        if clean_closing:
+            closing = clean_closing[-1]
+            closing_text = closing.group(0)
+            article = re.search(r"\bPasal\b", closing_text, flags=re.IGNORECASE)
+            narcotics_ends = list(
+                re.finditer(r"tentang\s+Narkotika", closing_text, flags=re.IGNORECASE)
+            )
+            if article and narcotics_ends:
+                match = _SpanMatch(
+                    text=text,
+                    start_position=closing.start() + article.start(),
+                    end_position=closing.start() + narcotics_ends[-1].end(),
+                )
     return _from_match(
         section,
         match,
         question=(
-            "Dakwaan atau ketentuan pidana mana yang dipilih Majelis Hakim "
-            f"ketika menilai perkara {name}?"
+            "Ketentuan pidana apa yang menjadi dasar pertimbangan Majelis Hakim "
+            f"dalam perkara {name}?"
         ),
-        answer=_clean(match.group(0)).rstrip(";"),
+        answer=_strip_item_number(_clean(match.group(0)).rstrip(";")),
         difficulty="hard",
         rule="reasoning.selected_charge",
     )
@@ -225,7 +272,8 @@ def _draft_reasoning(section: Mapping[str, Any], name: str) -> QuestionDraft:
 def _draft_disposition(section: Mapping[str, Any], name: str) -> QuestionDraft:
     text = str(section["section_text"])
     match = re.search(
-        r"(?:\d+\.\s*)?Menjatuhkan\s+pidana[^;]{20,900}?;",
+        r"(?:\d+\.\s*)?Menjatuhkan\s+pidana.{20,900}?"
+        r"(?=;|\s+\d+\.\s+(?:Menetapkan|Memerintahkan|Membebankan)|$)",
         text,
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -235,7 +283,7 @@ def _draft_disposition(section: Mapping[str, Any], name: str) -> QuestionDraft:
         section,
         match,
         question=f"Pidana apa yang dijatuhkan kepada {name}?",
-        answer=_clean(match.group(0)).rstrip(";"),
+        answer=_strip_item_number(_clean(match.group(0)).rstrip(";")),
         difficulty="easy",
         rule="disposition.sentence",
     )
@@ -243,7 +291,7 @@ def _draft_disposition(section: Mapping[str, Any], name: str) -> QuestionDraft:
 
 def _from_match(
     section: Mapping[str, Any],
-    match: re.Match[str],
+    match: re.Match[str] | _SpanMatch,
     *,
     question: str,
     answer: str,
@@ -275,3 +323,31 @@ def _trim_span(text: str, start: int, end: int) -> tuple[int, int]:
 
 def _clean(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip(" ;")
+
+
+def _strip_item_number(value: str) -> str:
+    return re.sub(r"^\d+\.\s*", "", value).strip()
+
+
+@dataclass(frozen=True)
+class _SpanMatch:
+    """Minimal match-like object for a reviewed subspan of a regex match."""
+
+    text: str
+    start_position: int
+    end_position: int
+
+    def start(self) -> int:
+        return self.start_position
+
+    def end(self) -> int:
+        return self.end_position
+
+    def group(self, number: int = 0) -> str:
+        if number != 0:
+            raise IndexError(number)
+        return self.text[self.start_position : self.end_position]
+
+
+def _shift_match(match: re.Match[str], text: str, offset: int) -> _SpanMatch:
+    return _SpanMatch(text, offset + match.start(), offset + match.end())
