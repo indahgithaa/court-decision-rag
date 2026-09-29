@@ -68,6 +68,7 @@ class DenseVectorStore:
         query_embedding: NDArray[np.floating[Any]],
         *,
         k: int = 10,
+        document_id: str | None = None,
     ) -> list[SearchResult]:
         if k <= 0:
             raise ValueError("k must be positive")
@@ -82,8 +83,24 @@ class DenseVectorStore:
         if not np.isfinite(norm) or norm == 0.0:
             raise ValueError("query embedding must be finite and non-zero")
         scores = self.embeddings @ (query / norm)
-        limit = min(k, len(self.chunks))
-        indices = np.argsort(-scores, kind="stable")[:limit]
+        if document_id is None:
+            candidate_indices = np.arange(len(self.chunks))
+        else:
+            if not document_id.strip():
+                raise ValueError("document_id must not be blank")
+            candidate_indices = np.asarray(
+                [
+                    index
+                    for index, chunk in enumerate(self.chunks)
+                    if str(chunk.get("document_id", "")) == document_id
+                ],
+                dtype=np.int64,
+            )
+            if candidate_indices.size == 0:
+                raise ValueError(f"No chunks found for document_id {document_id!r}")
+        limit = min(k, len(candidate_indices))
+        local_order = np.argsort(-scores[candidate_indices], kind="stable")[:limit]
+        indices = candidate_indices[local_order]
         return [
             SearchResult(chunk=self.chunks[int(index)], score=float(scores[int(index)]))
             for index in indices

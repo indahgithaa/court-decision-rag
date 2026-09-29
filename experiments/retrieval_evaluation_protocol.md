@@ -147,6 +147,19 @@ atau `0` bila tidak cukup.
 7. Tinjau contoh kemenangan dan kegagalan kedua strategi, khususnya bukti yang
    berada dekat batas section atau batas chunk.
 
+## Diagnosis document-conditioned
+
+Jika analisis error menunjukkan dokumen relevan sudah masuk hasil teratas tetapi
+chunk bukti belum ditemukan, jalankan retrieval diagnostik dengan
+`--oracle-document-filter`. Pencarian ini memakai `document_id` anotasi untuk
+membatasi kandidat sebelum ranking. Tujuannya hanya mengisolasi kualitas ranking
+chunk di dalam dokumen dari kualitas pemilihan dokumen.
+
+Hasil ini harus dilaporkan sebagai **gold-document oracle**, tidak boleh
+dicampur dengan hasil corpus-wide, dan tidak boleh menjadi dasar klaim performa
+sistem end-to-end. Perbandingan tetap memakai pertanyaan, model embedding,
+nilai `k`, dan filter dokumen yang sama untuk kedua strategi.
+
 Jika konfigurasi diubah setelah melihat hasil pilot, catat perubahan dan
 alasannya. Konfigurasi tersebut kemudian dibekukan sebelum evaluasi holdout.
 

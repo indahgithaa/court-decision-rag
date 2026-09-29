@@ -58,3 +58,26 @@ def test_latency_summary_uses_interpolated_p95() -> None:
     assert result["mean_ms"] == pytest.approx(20.0)
     assert result["median_ms"] == pytest.approx(20.0)
     assert result["p95_ms"] == pytest.approx(29.0)
+
+
+def test_report_marks_gold_document_oracle_scope() -> None:
+    qrels = [
+        {"query_id": "q1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+    ]
+    fixed = _record("q1", "fixed_size", ["f1"], 1.0)
+    structure = _record("q1", "structure_aware", ["s1"], 1.0)
+    fixed["retrieval_scope"] = "gold_document_oracle"
+    structure["retrieval_scope"] = "gold_document_oracle"
+
+    result = evaluate_paired_runs(
+        qrels,
+        {"fixed_size": [fixed], "structure_aware": [structure]},
+        ks=(1,),
+        bootstrap_samples=10,
+    )
+
+    markdown = render_markdown(result)
+    assert result["retrieval_scope"] == "gold_document_oracle"
+    assert "gold-document oracle" in markdown
+    assert "bukan performa retrieval end-to-end" in markdown

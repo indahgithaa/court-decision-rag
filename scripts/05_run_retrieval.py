@@ -26,6 +26,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--k", type=int, help="Override retrieval.top_k")
     parser.add_argument("--device")
+    parser.add_argument(
+        "--oracle-document-filter",
+        action="store_true",
+        help=(
+            "Restrict each search to its annotated document. This is an oracle "
+            "diagnostic for chunk ranking, not a corpus-wide retrieval result."
+        ),
+    )
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
@@ -53,7 +61,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     records = []
     for question in questions:
         started = time.perf_counter()
-        results = retriever.retrieve(question["question"], k=k)
+        document_filter = (
+            question["document_id"] if args.oracle_document_filter else None
+        )
+        results = retriever.retrieve(
+            question["question"],
+            k=k,
+            document_id=document_filter,
+        )
         latency_ms = (time.perf_counter() - started) * 1000
         records.append(
             {
@@ -62,6 +77,11 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "target_section_label": question["target_section_label"],
                 "strategy": str(store.chunks[0].get("strategy", "")),
                 "model_name": store.model_name,
+                "retrieval_scope": (
+                    "gold_document_oracle"
+                    if args.oracle_document_filter
+                    else "full_corpus"
+                ),
                 "top_k": k,
                 "latency_ms": latency_ms,
                 "ranking": [

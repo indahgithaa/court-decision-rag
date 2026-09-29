@@ -60,3 +60,35 @@ def test_retriever_rejects_model_mismatch() -> None:
 
     with pytest.raises(ValueError, match="does not match"):
         DenseRetriever(FakeEmbedder(), store)
+
+
+def test_dense_retriever_can_restrict_search_to_one_document() -> None:
+    chunks = [
+        {"chunk_id": "d1-low", "document_id": "d1", "text": "Perdata"},
+        {"chunk_id": "d2-high", "document_id": "d2", "text": "Narkotika"},
+    ]
+    embedder = FakeEmbedder()
+    store = DenseVectorStore(
+        chunks,
+        embedder.embed_documents([chunk["text"] for chunk in chunks]),
+        model_name=embedder.model_name,
+    )
+
+    results = DenseRetriever(embedder, store).retrieve(
+        "perkara narkotika",
+        k=5,
+        document_id="d1",
+    )
+
+    assert [result.chunk_id for result in results] == ["d1-low"]
+
+
+def test_dense_store_rejects_unknown_document_filter() -> None:
+    store = DenseVectorStore(
+        [{"chunk_id": "c1", "document_id": "d1", "text": "x"}],
+        np.asarray([[1.0, 0.0]], dtype=np.float32),
+        model_name="fake-asymmetric",
+    )
+
+    with pytest.raises(ValueError, match="No chunks found"):
+        store.search(np.asarray([1.0, 0.0]), document_id="missing")

@@ -19,11 +19,17 @@ class DenseRetriever:
         self.embedder = embedder
         self.store = store
 
-    def retrieve(self, query: str, *, k: int = 10) -> list[SearchResult]:
+    def retrieve(
+        self,
+        query: str,
+        *,
+        k: int = 10,
+        document_id: str | None = None,
+    ) -> list[SearchResult]:
         if not query.strip():
             raise ValueError("query must not be blank")
         embedding = self.embedder.embed_queries([query])[0]
-        return self.store.search(embedding, k=k)
+        return self.store.search(embedding, k=k, document_id=document_id)
 
     def retrieve_many(
         self,

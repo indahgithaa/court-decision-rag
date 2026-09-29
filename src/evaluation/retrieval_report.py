@@ -40,6 +40,10 @@ def evaluate_paired_runs(
         raise ValueError("Fixed-size run query IDs do not match qrels")
     if parsed_runs["structure_aware"]["labels"] != labels:
         raise ValueError("Runs must contain identical query IDs and section labels")
+    scopes = {parsed_runs[strategy]["scope"] for strategy in STRATEGIES}
+    if len(scopes) != 1:
+        raise ValueError("Runs must use the same retrieval scope")
+    retrieval_scope = scopes.pop()
 
     strategies: dict[str, Any] = {}
     for strategy in STRATEGIES:
@@ -85,6 +89,7 @@ def evaluate_paired_runs(
         "comparison": "structure_aware_minus_fixed_size",
         "bootstrap_samples": bootstrap_samples,
         "seed": seed,
+        "retrieval_scope": retrieval_scope,
         "strategies": strategies,
         "paired_difference": paired,
     }
@@ -114,8 +119,14 @@ def paired_bootstrap_interval(
 def render_markdown(result: Mapping[str, Any]) -> str:
     """Render the compact, thesis-oriented portion of an evaluation result."""
     strategies = result["strategies"]
+    retrieval_scope = str(result.get("retrieval_scope", "full_corpus"))
+    title_suffix = (
+        " - gold-document oracle"
+        if retrieval_scope == "gold_document_oracle"
+        else " - corpus-wide"
+    )
     lines = [
-        "# Evaluasi retrieval exploration_20",
+        f"# Evaluasi retrieval exploration_20{title_suffix}",
         "",
         f"Pertanyaan: {result['query_count']}",
         "",
@@ -151,10 +162,12 @@ def render_markdown(result: Mapping[str, Any]) -> str:
             f"{paired[metric]['mean_difference']:+.4f} |"
         )
 
+    section_cutoff = 5 if 5 in result["cutoffs"] else max(result["cutoffs"])
+    section_metric = f"hit@{section_cutoff}"
     lines.extend(
         [
             "",
-            "## Hit@5 per bagian",
+            f"## Hit@{section_cutoff} per bagian",
             "",
             "| Bagian | N | Fixed-size | Structure-aware |",
             "|---|---:|---:|---:|",
@@ -165,8 +178,8 @@ def render_markdown(result: Mapping[str, Any]) -> str:
     for label in fixed_sections:
         lines.append(
             f"| `{label}` | {fixed_sections[label]['query_count']} | "
-            f"{fixed_sections[label]['aggregate']['hit@5']:.4f} | "
-            f"{structure_sections[label]['aggregate']['hit@5']:.4f} |"
+            f"{fixed_sections[label]['aggregate'][section_metric]:.4f} | "
+            f"{structure_sections[label]['aggregate'][section_metric]:.4f} |"
         )
 
     lines.extend(
@@ -188,6 +201,14 @@ def render_markdown(result: Mapping[str, Any]) -> str:
         [
             "",
             "Interval kepercayaan dihitung dengan paired bootstrap pada unit pertanyaan.",
+            *(
+                [
+                    "Hasil gold-document oracle hanya mendiagnosis ranking chunk di dalam "
+                    "dokumen dan bukan performa retrieval end-to-end."
+                ]
+                if retrieval_scope == "gold_document_oracle"
+                else []
+            ),
             "Hasil pilot digunakan untuk diagnosis pipeline, bukan klaim final; klaim utama "
             "memerlukan holdout dokumen terpisah.",
             "",
@@ -224,6 +245,7 @@ def _parse_run_records(
     rankings: dict[str, list[str]] = {}
     labels: dict[str, str] = {}
     latencies: list[float] = []
+    scopes: set[str] = set()
     for record in records:
         query_id = str(record["query_id"])
         if query_id in rankings:
@@ -237,9 +259,17 @@ def _parse_run_records(
         rankings[query_id] = [str(item["chunk_id"]) for item in ranking]
         labels[query_id] = str(record["target_section_label"])
         latencies.append(float(record["latency_ms"]))
+        scopes.add(str(record.get("retrieval_scope", "full_corpus")))
     if not rankings:
         raise ValueError(f"Run is empty for strategy {strategy}")
-    return {"rankings": rankings, "labels": labels, "latencies": latencies}
+    if len(scopes) != 1:
+        raise ValueError(f"Mixed retrieval scopes in {strategy} run")
+    return {
+        "rankings": rankings,
+        "labels": labels,
+        "latencies": latencies,
+        "scope": scopes.pop(),
+    }
 
 
 def _percentile(sorted_values: Sequence[float], probability: float) -> float:
