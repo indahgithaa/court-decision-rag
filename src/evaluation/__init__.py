@@ -1,5 +1,9 @@
 """Evaluation metrics for structure detection and retrieval experiments."""
 
+from src.evaluation.error_analysis import (
+    analyze_retrieval_errors,
+    render_error_markdown,
+)
 from src.evaluation.ground_truth import (
     build_qrel_candidates,
     join_clean_pages,
@@ -12,6 +16,7 @@ from src.evaluation.retrieval_metrics import (
     recall_at_k,
     reciprocal_rank_at_k,
 )
+from src.evaluation.retrieval_report import evaluate_paired_runs, render_markdown
 from src.evaluation.structure_metrics import (
     render_structure_score,
     score_structure_review,
@@ -22,19 +27,20 @@ from src.evaluation.sac_compliance import (
 )
 
 __all__ = [
+    "analyze_retrieval_errors",
     "build_qrel_candidates",
     "evaluate_retrieval",
+    "evaluate_paired_runs",
     "hit_rate_at_k",
     "join_clean_pages",
     "ndcg_at_k",
     "recall_at_k",
     "reciprocal_rank_at_k",
+    "render_error_markdown",
+    "render_markdown",
     "render_structure_score",
     "render_sac_compliance",
     "score_structure_review",
     "validate_questions",
     "validate_sac_compliance",
 ]
-from .retrieval_report import evaluate_paired_runs, render_markdown
-
-__all__ = ["evaluate_paired_runs", "render_markdown"]
