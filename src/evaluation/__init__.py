@@ -35,3 +35,6 @@ __all__ = [
     "validate_questions",
     "validate_sac_compliance",
 ]
+from .retrieval_report import evaluate_paired_runs, render_markdown
+
+__all__ = ["evaluate_paired_runs", "render_markdown"]

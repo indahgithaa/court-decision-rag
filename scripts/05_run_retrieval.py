@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import time
 from pathlib import Path
 from typing import Sequence
 
@@ -46,14 +47,23 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     retriever = DenseRetriever(embedder, store)
     k = args.k or int(retrieval.get("top_k", 10))
-    rankings = retriever.retrieve_many([row["question"] for row in questions], k=k)
+    # Load the model and warm up the query path before measuring online latency.
+    # Model download/loading is setup cost, not per-query retrieval latency.
+    embedder.embed_queries([questions[0]["question"]])
     records = []
-    for question, results in zip(questions, rankings, strict=True):
+    for question in questions:
+        started = time.perf_counter()
+        results = retriever.retrieve(question["question"], k=k)
+        latency_ms = (time.perf_counter() - started) * 1000
         records.append(
             {
                 "query_id": question["query_id"],
                 "document_id": question["document_id"],
                 "target_section_label": question["target_section_label"],
+                "strategy": str(store.chunks[0].get("strategy", "")),
+                "model_name": store.model_name,
+                "top_k": k,
+                "latency_ms": latency_ms,
                 "ranking": [
                     {
                         "rank": rank,
