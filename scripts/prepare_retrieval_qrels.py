@@ -36,11 +36,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=Path("data/evaluation/exploration_20_questions.csv"),
     )
     parser.add_argument(
-        "--nsc-chunks",
-        type=Path,
-        default=Path("data/chunks/exploration_20/nsc/chunks.jsonl"),
-    )
-    parser.add_argument(
         "--fixed-chunks",
         type=Path,
         default=Path("data/chunks/exploration_20/fixed_size/chunks.jsonl"),
@@ -71,7 +66,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise ValueError("No approved questions are available")
 
     chunks: list[dict[str, Any]] = []
-    chunks.extend(read_jsonl(args.nsc_chunks))
     chunks.extend(read_jsonl(args.fixed_chunks))
     chunks.extend(read_jsonl(args.structure_chunks))
     candidates = build_qrel_candidates(approved, chunks)

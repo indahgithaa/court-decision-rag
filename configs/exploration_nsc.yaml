@@ -1,7 +1,0 @@
-extends: exploration.yaml
-
-chunking:
-  strategy: nsc
-  max_words: 300
-  overlap_words: 0
-  output_path: data/chunks/exploration_20/nsc/chunks.jsonl

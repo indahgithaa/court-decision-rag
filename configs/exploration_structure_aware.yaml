@@ -7,3 +7,6 @@ chunking:
   overlap_sentences: 2
   output_path: data/chunks/exploration_20/structure_aware/chunks.jsonl
 
+retrieval:
+  index_path: vector_db/exploration_20/structure_aware
+

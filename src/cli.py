@@ -8,7 +8,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
 
-from src.chunking import FixedSizeChunker, NaiveSequentialChunker, StructureAwareChunker
+from src.chunking import FixedSizeChunker, StructureAwareChunker
 from src.preprocessing import PDFExtractor, StructureDetector, TextCleaner
 from src.utils.config import load_config
 from src.utils.io import read_jsonl, write_jsonl
@@ -122,8 +122,6 @@ def chunk_main(argv: Sequence[str] | None = None) -> None:
     }
     if strategy == "fixed_size":
         chunker = FixedSizeChunker(**common_options)
-    elif strategy == "nsc":
-        chunker = NaiveSequentialChunker(max_words=common_options["max_words"])
     elif strategy == "structure_aware":
         chunker = StructureAwareChunker(
             **common_options,

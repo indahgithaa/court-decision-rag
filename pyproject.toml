@@ -9,8 +9,14 @@ description = "Research pipeline for structure-aware chunking of Indonesian cour
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "numpy>=2.0,<3.0",
   "PyMuPDF>=1.24,<2.0",
   "PyYAML>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+retrieval = [
+  "sentence-transformers>=3.0,<6.0",
 ]
 
 [project.scripts]

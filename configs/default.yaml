@@ -28,3 +28,15 @@ chunking:
   overlap_words: 50
   output_path: data/chunks/fixed_size/chunks.jsonl
 
+embedding:
+  provider: sentence_transformers
+  model_name: intfloat/multilingual-e5-small
+  batch_size: 16
+  normalize_embeddings: true
+  query_prefix: "query: "
+  document_prefix: "passage: "
+
+retrieval:
+  index_path: vector_db/default
+  top_k: 10
+

@@ -35,12 +35,3 @@ class FixedSizeChunker(BaseChunker):
             )
         return chunks
 
-
-class NaiveSequentialChunker(FixedSizeChunker):
-    """Paper-aligned NSC baseline with no overlap and no structure."""
-
-    strategy = "nsc"
-
-    def __init__(self, *, max_words: int = 300) -> None:
-        super().__init__(max_words=max_words, overlap_words=0)
-

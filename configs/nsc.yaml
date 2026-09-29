@@ -1,7 +1,0 @@
-extends: default.yaml
-
-chunking:
-  strategy: nsc
-  max_words: 300
-  overlap_words: 0
-  output_path: data/chunks/nsc/chunks.jsonl

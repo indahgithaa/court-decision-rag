@@ -6,3 +6,6 @@ chunking:
   overlap_words: 50
   output_path: data/chunks/exploration_20/fixed_size/chunks.jsonl
 
+retrieval:
+  index_path: vector_db/exploration_20/fixed_size
+
