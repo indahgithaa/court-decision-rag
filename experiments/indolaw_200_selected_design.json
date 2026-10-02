@@ -1,0 +1,12 @@
+{
+  "dataset": "indolaw_200",
+  "selected_on": "development_only",
+  "development_documents": 40,
+  "holdout_documents": 160,
+  "primary_metric": "hit@5",
+  "selection_rule": "maximize Hit@5, then MRR@5, then nDCG@5, then minimize chunk count",
+  "fixed_size": "fixed_w300_o60",
+  "structure_aware": "sac_w150_o30_s0",
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "reranking": "none (dense-only, frozen from prior pilot)"
+}

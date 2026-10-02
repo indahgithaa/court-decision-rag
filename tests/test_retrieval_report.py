@@ -1,7 +1,11 @@
 import pytest
 
 from src.evaluation.latency import summarize_latency
-from src.evaluation.retrieval_report import evaluate_paired_runs, render_markdown
+from src.evaluation.retrieval_report import (
+    evaluate_paired_runs,
+    paired_cluster_bootstrap_interval,
+    render_markdown,
+)
 
 
 def _record(query_id: str, strategy: str, ranking: list[str], latency: float) -> dict:
@@ -19,10 +23,10 @@ def _record(query_id: str, strategy: str, ranking: list[str], latency: float) ->
 
 def test_paired_report_compares_structure_aware_with_fixed_size() -> None:
     qrels = [
-        {"query_id": "q1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
-        {"query_id": "q1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
-        {"query_id": "q2", "strategy": "fixed_size", "chunk_id": "f2", "relevance_grade": "2"},
-        {"query_id": "q2", "strategy": "structure_aware", "chunk_id": "s2", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+        {"query_id": "q2", "document_id": "d2", "strategy": "fixed_size", "chunk_id": "f2", "relevance_grade": "2"},
+        {"query_id": "q2", "document_id": "d2", "strategy": "structure_aware", "chunk_id": "s2", "relevance_grade": "2"},
     ]
     runs = {
         "fixed_size": [
@@ -46,6 +50,8 @@ def test_paired_report_compares_structure_aware_with_fixed_size() -> None:
     assert result["strategies"]["fixed_size"]["overall"]["aggregate"]["hit@1"] == 0
     assert result["strategies"]["structure_aware"]["overall"]["aggregate"]["hit@1"] == 1
     assert result["paired_difference"]["hit@1"]["mean_difference"] == 1
+    assert result["bootstrap_unit"] == "document"
+    assert result["document_count"] == 2
     markdown = render_markdown(result)
     assert "SAC - fixed" in markdown
     assert "## Candidate coverage" in markdown
@@ -62,8 +68,8 @@ def test_latency_summary_uses_interpolated_p95() -> None:
 
 def test_report_marks_gold_document_oracle_scope() -> None:
     qrels = [
-        {"query_id": "q1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
-        {"query_id": "q1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
     ]
     fixed = _record("q1", "fixed_size", ["f1"], 1.0)
     structure = _record("q1", "structure_aware", ["s1"], 1.0)
@@ -81,3 +87,36 @@ def test_report_marks_gold_document_oracle_scope() -> None:
     assert result["retrieval_scope"] == "gold_document_oracle"
     assert "gold-document oracle" in markdown
     assert "bukan performa retrieval end-to-end" in markdown
+
+
+def test_report_marks_final_holdout_without_pilot_warning() -> None:
+    qrels = [
+        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+    ]
+    result = evaluate_paired_runs(
+        qrels,
+        {
+            "fixed_size": [_record("q1", "fixed_size", ["f1"], 1.0)],
+            "structure_aware": [_record("q1", "structure_aware", ["s1"], 1.0)],
+        },
+        ks=(1,),
+        bootstrap_samples=10,
+    )
+    result["evaluation_stage"] = "final_holdout"
+
+    markdown = render_markdown(result)
+
+    assert "tidak digunakan untuk pemilihan desain" in markdown
+    assert "Hasil pilot" not in markdown
+
+
+def test_cluster_bootstrap_keeps_document_questions_together() -> None:
+    low, high = paired_cluster_bootstrap_interval(
+        {"d1": [1.0, 1.0], "d2": [-1.0, -1.0]},
+        samples=2_000,
+        seed=7,
+    )
+
+    assert low == pytest.approx(-1.0)
+    assert high == pytest.approx(1.0)

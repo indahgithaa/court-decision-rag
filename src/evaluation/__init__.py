@@ -16,7 +16,16 @@ from src.evaluation.retrieval_metrics import (
     recall_at_k,
     reciprocal_rank_at_k,
 )
-from src.evaluation.retrieval_report import evaluate_paired_runs, render_markdown
+from src.evaluation.retrieval_report import (
+    evaluate_paired_runs,
+    paired_cluster_bootstrap_interval,
+    render_markdown,
+)
+from src.evaluation.sample_size import (
+    cluster_adjusted_plan,
+    estimate_equal_cluster_icc,
+    matched_binary_sample_size,
+)
 from src.evaluation.structure_metrics import (
     render_structure_score,
     score_structure_review,
@@ -31,6 +40,10 @@ __all__ = [
     "build_qrel_candidates",
     "evaluate_retrieval",
     "evaluate_paired_runs",
+    "paired_cluster_bootstrap_interval",
+    "matched_binary_sample_size",
+    "cluster_adjusted_plan",
+    "estimate_equal_cluster_icc",
     "hit_rate_at_k",
     "join_clean_pages",
     "ndcg_at_k",

@@ -142,10 +142,28 @@ atau `0` bila tidak cukup.
 5. Gunakan Hit@5 sebagai metrik primer karena jumlah chunk relevan dapat berbeda
    akibat overlap. Laporkan juga Hit@1/3/10, MRR@1/3/5/10, nDCG@1/3/5/10, dan
    Recall@1/3/5/10 secara keseluruhan serta per `target_section_label`.
-6. Hitung selisih skor per pertanyaan antara SAC dan fixed-size. Laporkan interval
-   kepercayaan bootstrap berpasangan untuk selisih rata-rata pada evaluasi final.
+6. Hitung selisih skor per pertanyaan antara SAC dan fixed-size. Karena empat
+   pertanyaan dari putusan yang sama tidak independen, laporkan interval
+   kepercayaan dengan *paired cluster bootstrap*: resample dokumen, lalu bawa
+   seluruh pertanyaan dokumen terpilih ke setiap replikasi.
 7. Tinjau contoh kemenangan dan kegagalan kedua strategi, khususnya bukti yang
    berada dekat batas section atau batas chunk.
+
+## Benchmark eksternal Indo-Law 200
+
+Benchmark robustness memakai 200 dokumen XML ternormalisasi dari Indo-Law.
+Split dilakukan berdasarkan pengadilan: 40 dokumen development untuk memilih
+desain dan 160 dokumen holdout untuk satu evaluasi final. Grid development
+menguji ukuran 150, 300, dan 500 kata dengan overlap 20% pada kedua keluarga.
+Aturan seleksi adalah Hit@5, lalu MRR@5, nDCG@5, dan jumlah chunk yang lebih
+kecil. Desain yang dibekukan adalah `fixed_w300_o60` dan `sac_w150_o30_s0`.
+
+Setiap dokumen memiliki empat pertanyaan deterministik berbasis span. Untuk
+pertanyaan ketentuan pidana, setiap kemunculan pasal ekuivalen dalam section
+pertimbangan hukum diperlakukan relevan; hal ini mencegah evaluasi menghukum
+retrieval yang menemukan penyebutan ekuivalen selain span pertama. Karena
+section berasal dari anotasi corpus, hasil benchmark ini diberi label
+oracle-structure dan dilaporkan terpisah dari evaluasi PDF.
 
 ## Diagnosis document-conditioned
 
@@ -160,8 +178,32 @@ dicampur dengan hasil corpus-wide, dan tidak boleh menjadi dasar klaim performa
 sistem end-to-end. Perbandingan tetap memakai pertanyaan, model embedding,
 nilai `k`, dan filter dokumen yang sama untuk kedua strategi.
 
+## Sensitivitas reranking
+
+Setelah evaluasi dense retrieval, rerank kandidat top-50 dengan BM25 dan weighted
+reciprocal-rank fusion. Gunakan parameter BM25, konstanta RRF, candidate depth,
+serta bobot dense yang identik untuk kedua strategi. Sweep bobot dilaksanakan
+pada `exploration_20`; semua titik harus dilaporkan agar pemilihan konfigurasi
+tidak menyembunyikan hasil yang berlawanan.
+
+Operating point pilot dipilih berdasarkan rata-rata Hit@5 kedua strategi,
+kemudian rata-rata MRR@5, lalu bobot dense yang lebih besar sebagai tie-breaker.
+Bobot terpilih dibekukan sebelum holdout dan tidak boleh dituning ulang dari
+hasil holdout. Candidate Hit@50 dilaporkan sebagai ceiling: reranker tidak dapat
+memulihkan chunk relevan yang tidak masuk kandidat dense awal.
+
 Jika konfigurasi diubah setelah melihat hasil pilot, catat perubahan dan
 alasannya. Konfigurasi tersebut kemudian dibekukan sebelum evaluasi holdout.
+
+## Perencanaan ukuran holdout
+
+Sebelum mengumpulkan holdout, jalankan `scripts/10_plan_holdout.py`. Script ini
+mengestimasi discordance Hit@5 dari pilot, lalu menghitung kebutuhan pasangan
+untuk beberapa minimum detectable effect (MDE). Karena unit sampling adalah
+dokumen dan terdapat empat pertanyaan per dokumen, tabel sensitivitas juga
+menginflasi kebutuhan dengan design effect untuk beberapa asumsi intraclass
+correlation (ICC). MDE, power, dan target dokumen harus dibekukan sebelum hasil
+holdout dibuka.
 
 ## Kriteria kesiapan
 

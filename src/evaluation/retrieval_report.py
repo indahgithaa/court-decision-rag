@@ -23,7 +23,12 @@ def evaluate_paired_runs(
     bootstrap_samples: int = 10_000,
     seed: int = 42,
 ) -> dict[str, Any]:
-    """Evaluate two strategy runs and paired SAC-minus-baseline differences."""
+    """Evaluate two strategy runs and paired SAC-minus-baseline differences.
+
+    Confidence intervals resample documents, not individual questions. The
+    four questions attached to one judgment share language and evidence, so a
+    question-level bootstrap can be overconfident.
+    """
     if bootstrap_samples <= 0:
         raise ValueError("bootstrap_samples must be positive")
     qrels = {strategy: _build_qrels(qrel_rows, strategy) for strategy in STRATEGIES}
@@ -34,6 +39,7 @@ def evaluate_paired_runs(
     expected_queries = set(qrels["fixed_size"])
     if set(qrels["structure_aware"]) != expected_queries:
         raise ValueError("Strategies must contain qrels for the same query IDs")
+    query_documents = _query_documents(qrel_rows, expected_queries)
 
     labels = parsed_runs["fixed_size"]["labels"]
     if set(labels) != expected_queries:
@@ -72,8 +78,11 @@ def evaluate_paired_runs(
             structure_per_query[query_id][metric] - fixed_per_query[query_id][metric]
             for query_id in sorted(expected_queries)
         ]
-        low, high = paired_bootstrap_interval(
-            differences,
+        differences_by_document: dict[str, list[float]] = defaultdict(list)
+        for query_id, difference in zip(sorted(expected_queries), differences):
+            differences_by_document[query_documents[query_id]].append(difference)
+        low, high = paired_cluster_bootstrap_interval(
+            differences_by_document,
             samples=bootstrap_samples,
             seed=seed,
         )
@@ -85,9 +94,11 @@ def evaluate_paired_runs(
 
     return {
         "query_count": len(expected_queries),
+        "document_count": len(set(query_documents.values())),
         "cutoffs": sorted(set(ks)),
         "comparison": "structure_aware_minus_fixed_size",
         "bootstrap_samples": bootstrap_samples,
+        "bootstrap_unit": "document",
         "seed": seed,
         "retrieval_scope": retrieval_scope,
         "strategies": strategies,
@@ -116,6 +127,33 @@ def paired_bootstrap_interval(
     return (_percentile(means, 0.025), _percentile(means, 0.975))
 
 
+def paired_cluster_bootstrap_interval(
+    differences_by_cluster: Mapping[str, Sequence[float]],
+    *,
+    samples: int = 10_000,
+    seed: int = 42,
+) -> tuple[float, float]:
+    """Return a percentile 95% CI after resampling whole clusters."""
+    clusters = [
+        tuple(float(value) for value in values)
+        for values in differences_by_cluster.values()
+    ]
+    if not clusters or any(not values for values in clusters):
+        raise ValueError("differences_by_cluster must contain non-empty clusters")
+    if samples <= 0:
+        raise ValueError("samples must be positive")
+    generator = random.Random(seed)
+    count = len(clusters)
+    means: list[float] = []
+    for _ in range(samples):
+        sampled = [clusters[generator.randrange(count)] for _ in range(count)]
+        means.append(
+            statistics.fmean(value for cluster in sampled for value in cluster)
+        )
+    means.sort()
+    return (_percentile(means, 0.025), _percentile(means, 0.975))
+
+
 def render_markdown(result: Mapping[str, Any]) -> str:
     """Render the compact, thesis-oriented portion of an evaluation result."""
     strategies = result["strategies"]
@@ -125,8 +163,10 @@ def render_markdown(result: Mapping[str, Any]) -> str:
         if retrieval_scope == "gold_document_oracle"
         else " - corpus-wide"
     )
+    dataset_label = str(result.get("dataset", "exploration_20"))
+    evaluation_stage = str(result.get("evaluation_stage", "pilot"))
     lines = [
-        f"# Evaluasi retrieval exploration_20{title_suffix}",
+        f"# Evaluasi retrieval {dataset_label}{title_suffix}",
         "",
         f"Pertanyaan: {result['query_count']}",
         "",
@@ -200,7 +240,8 @@ def render_markdown(result: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Interval kepercayaan dihitung dengan paired bootstrap pada unit pertanyaan.",
+            "Interval kepercayaan dihitung dengan paired cluster bootstrap pada unit "
+            "dokumen; seluruh pertanyaan dari dokumen yang terpilih diresample bersama.",
             *(
                 [
                     "Hasil gold-document oracle hanya mendiagnosis ranking chunk di dalam "
@@ -209,8 +250,17 @@ def render_markdown(result: Mapping[str, Any]) -> str:
                 if retrieval_scope == "gold_document_oracle"
                 else []
             ),
-            "Hasil pilot digunakan untuk diagnosis pipeline, bukan klaim final; klaim utama "
-            "memerlukan holdout dokumen terpisah.",
+            *(
+                [
+                    "Hasil ini berasal dari holdout dokumen yang tidak digunakan untuk "
+                    "pemilihan desain."
+                ]
+                if evaluation_stage == "final_holdout"
+                else [
+                    "Hasil pilot digunakan untuk diagnosis pipeline, bukan klaim final; "
+                    "klaim utama memerlukan holdout dokumen terpisah."
+                ]
+            ),
             "",
         ]
     )
@@ -237,6 +287,25 @@ def _build_qrels(
         if not any(value > 0 for value in relevance.values()):
             raise ValueError(f"No positive qrel for {strategy}/{query_id}")
     return dict(qrels)
+
+
+def _query_documents(
+    rows: Sequence[Mapping[str, Any]], expected_queries: set[str]
+) -> dict[str, str]:
+    documents: dict[str, str] = {}
+    for row in rows:
+        query_id = str(row.get("query_id", ""))
+        if query_id not in expected_queries:
+            continue
+        document_id = str(row.get("document_id", "")).strip()
+        if not document_id:
+            raise ValueError(f"Missing document_id for {query_id}")
+        previous = documents.setdefault(query_id, document_id)
+        if previous != document_id:
+            raise ValueError(f"Mixed document_id values for {query_id}")
+    if set(documents) != expected_queries:
+        raise ValueError("Every query must map to exactly one document")
+    return documents
 
 
 def _parse_run_records(
