@@ -101,7 +101,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "split": "development",
         "document_count": 40,
         "query_count": len(questions),
-        "selection_rule": "maximize Hit@5, then MRR@5, then nDCG@5, then minimize chunk count",
+        "selection_rule": "maximize nDCG@5, then MRR@5, then Recall@5, then minimize chunk count",
         "sentence_overlap_note": (
             "s0 and s2 were byte-identical because normalized XML lacks sentence punctuation; "
             "only s0 was indexed"
@@ -118,7 +118,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "selected_on": "development_only",
         "development_documents": 40,
         "holdout_documents": 160,
-        "primary_metric": "hit@5",
+        "reported_metrics": ["recall@k", "mrr@k", "ndcg@k"],
         "selection_rule": result["selection_rule"],
         "fixed_size": selected["fixed_size"],
         "structure_aware": selected["structure_aware"],
@@ -146,9 +146,9 @@ def _select(evaluations: dict[str, Any], family: str) -> str:
         result = evaluations[name]
         aggregate = result["overall"]["aggregate"]
         return (
-            aggregate["hit@5"],
-            aggregate["mrr@5"],
             aggregate["ndcg@5"],
+            aggregate["mrr@5"],
+            aggregate["recall@5"],
             -int(result["chunk_count"]),
         )
 
@@ -161,16 +161,16 @@ def render_markdown(result: dict[str, Any]) -> str:
         "",
         f"Dokumen: {result['document_count']}; pertanyaan: {result['query_count']}.",
         "",
-        "| Konfigurasi | Chunk | Hit@1 | Hit@5 | MRR@5 | nDCG@5 | Hit@10 | Hit@50 | P95 ms |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Konfigurasi | Chunk | Recall@5 | MRR@5 | nDCG@5 | Recall@10 | Recall@50 | P95 ms |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for name, evaluation in result["evaluations"].items():
         aggregate = evaluation["overall"]["aggregate"]
         lines.append(
-            f"| `{name}` | {evaluation['chunk_count']} | {aggregate['hit@1']:.4f} | "
-            f"{aggregate['hit@5']:.4f} | {aggregate['mrr@5']:.4f} | "
-            f"{aggregate['ndcg@5']:.4f} | {aggregate['hit@10']:.4f} | "
-            f"{aggregate['hit@50']:.4f} | {evaluation['latency']['p95_ms']:.2f} |"
+            f"| `{name}` | {evaluation['chunk_count']} | {aggregate['recall@5']:.4f} | "
+            f"{aggregate['mrr@5']:.4f} | {aggregate['ndcg@5']:.4f} | "
+            f"{aggregate['recall@10']:.4f} | {aggregate['recall@50']:.4f} | "
+            f"{evaluation['latency']['p95_ms']:.2f} |"
         )
     lines.extend(
         [

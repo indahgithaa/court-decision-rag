@@ -142,8 +142,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         "bootstrap_samples": args.bootstrap_samples,
         "seed": args.seed,
         "selection_rule": (
-            "highest mean Hit@5 across both strategies, then mean MRR@5, "
-            "then larger dense weight"
+            "highest mean nDCG@5 across both strategies, then mean MRR@5, "
+            "mean Recall@5, then larger dense weight"
         ),
         "selected_dense_weight": float(selected_key),
         "evaluations": evaluations,
@@ -171,8 +171,8 @@ def render_sensitivity_markdown(result: Mapping[str, Any]) -> str:
         f"{result['candidate_depth']} dengan weighted reciprocal-rank fusion. ",
         "Bobot dan parameter identik digunakan untuk fixed-size dan SAC.",
         "",
-        "| Dense | BM25 | Fixed Hit@5 | SAC Hit@5 | SAC - fixed | 95% CI | Fixed MRR@5 | SAC MRR@5 |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Dense | BM25 | Fixed Recall@5 | SAC Recall@5 | Fixed MRR@5 | SAC MRR@5 | Fixed nDCG@5 | SAC nDCG@5 | SAC - fixed nDCG | 95% CI |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     evaluations = result["evaluations"]
     for key, evaluation in evaluations.items():
@@ -181,13 +181,14 @@ def render_sensitivity_markdown(result: Mapping[str, Any]) -> str:
         structure = evaluation["strategies"]["structure_aware"]["overall"][
             "aggregate"
         ]
-        delta = evaluation["paired_difference"]["hit@5"]
+        delta = evaluation["paired_difference"]["ndcg@5"]
         lines.append(
             f"| {dense_weight:.2f} | {1 - dense_weight:.2f} | "
-            f"{fixed['hit@5']:.4f} | {structure['hit@5']:.4f} | "
+            f"{fixed['recall@5']:.4f} | {structure['recall@5']:.4f} | "
+            f"{fixed['mrr@5']:.4f} | {structure['mrr@5']:.4f} | "
+            f"{fixed['ndcg@5']:.4f} | {structure['ndcg@5']:.4f} | "
             f"{delta['mean_difference']:+.4f} | "
-            f"[{delta['ci95_low']:+.4f}, {delta['ci95_high']:+.4f}] | "
-            f"{fixed['mrr@5']:.4f} | {structure['mrr@5']:.4f} |"
+            f"[{delta['ci95_low']:+.4f}, {delta['ci95_high']:+.4f}] |"
         )
 
     selected_key = _weight_key(float(result["selected_dense_weight"]))
@@ -211,15 +212,19 @@ def render_sensitivity_markdown(result: Mapping[str, Any]) -> str:
                 else "Keputusan pilot: bekukan bobot fusion ini untuk evaluasi holdout."
             ),
             "",
-            "| Bagian | N | Fixed Hit@5 | SAC Hit@5 |",
-            "|---|---:|---:|---:|",
+            "| Bagian | N | Fixed Recall@5 | SAC Recall@5 | Fixed MRR@5 | SAC MRR@5 | Fixed nDCG@5 | SAC nDCG@5 |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for label in fixed_sections:
         lines.append(
             f"| `{label}` | {fixed_sections[label]['query_count']} | "
-            f"{fixed_sections[label]['aggregate']['hit@5']:.4f} | "
-            f"{structure_sections[label]['aggregate']['hit@5']:.4f} |"
+            f"{fixed_sections[label]['aggregate']['recall@5']:.4f} | "
+            f"{structure_sections[label]['aggregate']['recall@5']:.4f} | "
+            f"{fixed_sections[label]['aggregate']['mrr@5']:.4f} | "
+            f"{structure_sections[label]['aggregate']['mrr@5']:.4f} | "
+            f"{fixed_sections[label]['aggregate']['ndcg@5']:.4f} | "
+            f"{structure_sections[label]['aggregate']['ndcg@5']:.4f} |"
         )
     fixed_overall = selected["strategies"]["fixed_size"]["overall"]["aggregate"]
     structure_overall = selected["strategies"]["structure_aware"]["overall"][
@@ -230,8 +235,8 @@ def render_sensitivity_markdown(result: Mapping[str, Any]) -> str:
             "",
             "## Batas interpretasi",
             "",
-            f"Candidate ceiling Hit@50: fixed-size {fixed_overall['hit@50']:.4f}; "
-            f"SAC {structure_overall['hit@50']:.4f}.",
+            f"Candidate Recall@50: fixed-size {fixed_overall['recall@50']:.4f}; "
+            f"SAC {structure_overall['recall@50']:.4f}.",
             "Bobot dipilih pada exploration_20 dan hanya boleh diperlakukan sebagai "
             "konfigurasi development. Klaim utama tetap memerlukan evaluasi holdout.",
             "",
@@ -241,15 +246,18 @@ def render_sensitivity_markdown(result: Mapping[str, Any]) -> str:
 
 
 def _select_weight(evaluations: Mapping[str, Mapping[str, Any]]) -> str:
-    def criterion(key: str) -> tuple[float, float, float]:
+    def criterion(key: str) -> tuple[float, float, float, float]:
         evaluation = evaluations[key]
         aggregates = [
             evaluation["strategies"][strategy]["overall"]["aggregate"]
             for strategy in STRATEGIES
         ]
-        mean_hit = sum(values["hit@5"] for values in aggregates) / len(aggregates)
+        mean_ndcg = sum(values["ndcg@5"] for values in aggregates) / len(aggregates)
         mean_mrr = sum(values["mrr@5"] for values in aggregates) / len(aggregates)
-        return (mean_hit, mean_mrr, float(key))
+        mean_recall = sum(values["recall@5"] for values in aggregates) / len(
+            aggregates
+        )
+        return (mean_ndcg, mean_mrr, mean_recall, float(key))
 
     return max(evaluations, key=criterion)
 

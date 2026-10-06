@@ -7,23 +7,25 @@ import statistics
 from collections.abc import Mapping, Sequence
 
 
-def matched_binary_sample_size(
+def paired_mean_sample_size(
     effect: float,
-    discordance_rate: float,
+    difference_standard_deviation: float,
     *,
     alpha: float = 0.05,
     power: float = 0.80,
 ) -> int:
-    """Approximate required paired queries for a two-sided McNemar comparison.
+    """Approximate required pairs for a two-sided mean-difference comparison.
 
-    ``effect`` is the target absolute difference in paired hit probabilities.
-    ``discordance_rate`` is the expected fraction of pairs where only one
-    strategy succeeds. The approximation is used for planning, not inference.
+    ``effect`` is the target absolute mean difference and
+    ``difference_standard_deviation`` is estimated from paired pilot outcomes.
+    The normal approximation is used for planning, not inference.
     """
     effect = abs(float(effect))
-    discordance_rate = float(discordance_rate)
-    if not 0 < effect <= discordance_rate <= 1:
-        raise ValueError("require 0 < effect <= discordance_rate <= 1")
+    difference_standard_deviation = float(difference_standard_deviation)
+    if effect <= 0:
+        raise ValueError("effect must be positive")
+    if difference_standard_deviation <= 0:
+        raise ValueError("difference_standard_deviation must be positive")
     if not 0 < alpha < 1:
         raise ValueError("alpha must be between zero and one")
     if not 0 < power < 1:
@@ -32,12 +34,9 @@ def matched_binary_sample_size(
     normal = statistics.NormalDist()
     z_alpha = normal.inv_cdf(1 - alpha / 2)
     z_power = normal.inv_cdf(power)
-    variance_under_alternative = discordance_rate - effect**2
-    numerator = (
-        z_alpha * math.sqrt(discordance_rate)
-        + z_power * math.sqrt(variance_under_alternative)
-    ) ** 2
-    return math.ceil(numerator / effect**2)
+    return math.ceil(
+        ((z_alpha + z_power) * difference_standard_deviation / effect) ** 2
+    )
 
 
 def cluster_adjusted_plan(

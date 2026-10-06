@@ -2,17 +2,16 @@
 
 ## Kesimpulan
 
-Pada benchmark corpus-wide ini, structure-aware chunking (SAC) meningkatkan
-Hit@5 dari 0,5453 menjadi 0,6375 dibanding fixed-size chunking. Selisih
-berpasangan sebesar **+0,0922** memiliki interval kepercayaan 95%
-**[+0,0469, +0,1375]** berdasarkan 10.000 paired cluster bootstrap pada unit
-dokumen. Untuk benchmark ini, desain SAC yang dibekukan adalah pilihan terbaik
-untuk retrieval top-5 secara keseluruhan.
+Pada corrected analysis corpus-wide, structure-aware chunking (SAC) memberikan
+Recall@5 dan NDCG@5 yang lebih tinggi daripada fixed-size chunking. Recall@5
+meningkat dari 0,4322 menjadi 0,6080, sedangkan NDCG@5 meningkat dari 0,3476
+menjadi 0,4380. Interval kepercayaan 95% untuk kedua selisih berada di atas nol.
 
-Efek tersebut tidak seragam. SAC sangat membantu pertanyaan identitas, dakwaan,
-dan amar, tetapi menurunkan Hit@5 pertimbangan hukum dari 0,7562 menjadi 0,1625.
-Karena itu, hasil ini mendukung SAC sebagai default keseluruhan, bukan klaim
-bahwa SAC terbaik untuk setiap tipe pertanyaan hukum.
+MRR@5 meningkat dari 0,3574 menjadi 0,3890, tetapi interval selisihnya sedikit
+melintasi nol. Karena itu bukti peningkatan posisi hasil relevan pertama pada
+cutoff 5 belum konklusif. Efek juga berbeda antarbagian: SAC sangat membantu
+amar dan identitas, sedangkan fixed-size tetap lebih kuat untuk pertimbangan
+hukum.
 
 ## Corpus dan pemisahan data
 
@@ -24,66 +23,65 @@ bahwa SAC terbaik untuk setiap tipe pertanyaan hukum.
 - Seluruh file sumber yang dipakai cocok dengan SHA-256 pada manifest.
 
 Corpus memakai teks XML ternormalisasi dan anotasi section dari sumber. Studi
-ini dengan demikian mengukur **oracle-structure robustness**, bukan ketahanan
-terhadap ekstraksi PDF atau kesalahan deteksi section otomatis.
+ini mengukur **oracle-structure robustness**, bukan ketahanan terhadap ekstraksi
+PDF atau kesalahan deteksi section otomatis.
 
 ## Pemilihan desain pada development
 
-Aturan yang dibekukan adalah memaksimalkan Hit@5, kemudian MRR@5, nDCG@5, dan
-terakhir memilih jumlah chunk yang lebih kecil. Holdout tidak digunakan untuk
-memilih konfigurasi.
+Evaluator mengikuti metrik pada draft skripsi: Recall@K, MRR, dan NDCG@K.
+Aturan operasional untuk memilih satu desain adalah NDCG@5, kemudian MRR@5,
+Recall@5, dan terakhir jumlah chunk yang lebih kecil.
 
-| Konfigurasi | Chunk | Hit@5 | MRR@5 | nDCG@5 |
+| Konfigurasi | Chunk | Recall@5 | MRR@5 | NDCG@5 |
 |---|---:|---:|---:|---:|
-| `fixed_w150_o30` | 2.341 | 0,6562 | 0,3622 | 0,3492 |
-| `fixed_w300_o60` | 1.173 | 0,6562 | 0,3914 | 0,3779 |
-| `fixed_w500_o100` | 710 | 0,6500 | 0,4315 | 0,4168 |
-| `sac_w150_o30_s0` | 2.457 | 0,6687 | 0,4146 | 0,4587 |
-| `sac_w300_o60_s0` | 1.346 | 0,6500 | 0,4322 | 0,4554 |
-| `sac_w500_o100_s0` | 923 | 0,6125 | 0,4255 | 0,4441 |
+| `fixed_w150_o30` | 2.341 | 0,5128 | 0,3622 | 0,3492 |
+| `fixed_w300_o60` | 1.173 | 0,5192 | 0,3914 | 0,3779 |
+| `fixed_w500_o100` | 710 | 0,5205 | 0,4315 | 0,4168 |
+| `sac_w150_o30_s0` | 2.457 | 0,6285 | 0,4146 | 0,4587 |
+| `sac_w300_o60_s0` | 1.346 | 0,5707 | 0,4322 | 0,4554 |
+| `sac_w500_o100_s0` | 923 | 0,5445 | 0,4255 | 0,4441 |
 
-Desain terpilih adalah `fixed_w300_o60` dan `sac_w150_o30_s0`. Kondisi overlap
+Desain terpilih adalah `fixed_w500_o100` dan `sac_w150_o30_s0`. Kondisi overlap
 dua kalimat tidak menjadi kondisi efektif karena teks XML ternormalisasi tidak
 memiliki tanda baca kalimat yang dibutuhkan splitter; keluaran s0 dan s2 identik.
 
-## Hasil holdout terkunci
+## Hasil corrected holdout analysis
 
 | Metrik | Fixed-size | SAC | SAC - fixed | 95% CI |
 |---|---:|---:|---:|---:|
-| Hit@1 | 0,1984 | 0,2687 | +0,0703 | [+0,0359, +0,1047] |
-| Hit@3 | 0,4266 | 0,4734 | +0,0469 | [+0,0031, +0,0906] |
-| **Hit@5** | **0,5453** | **0,6375** | **+0,0922** | **[+0,0469, +0,1375]** |
-| MRR@5 | 0,3245 | 0,3890 | +0,0644 | [+0,0321, +0,0959] |
-| nDCG@5 | 0,3066 | 0,4380 | +0,1314 | [+0,1014, +0,1608] |
-| Hit@10 | 0,6531 | 0,7406 | +0,0875 | [+0,0484, +0,1281] |
-| Hit@50 | 0,8109 | 0,8000 | -0,0109 | [-0,0484, +0,0281] |
+| Recall@1 | 0,2154 | 0,2654 | +0,0501 | [+0,0191, +0,0803] |
+| MRR@1 | 0,2437 | 0,2687 | +0,0250 | [-0,0109, +0,0594] |
+| NDCG@1 | 0,2437 | 0,2687 | +0,0250 | [-0,0109, +0,0594] |
+| Recall@5 | 0,4322 | 0,6080 | +0,1758 | [+0,1319, +0,2174] |
+| MRR@5 | 0,3574 | 0,3890 | +0,0316 | [-0,0032, +0,0647] |
+| NDCG@5 | 0,3476 | 0,4380 | +0,0904 | [+0,0570, +0,1223] |
+| Recall@10 | 0,5074 | 0,6929 | +0,1855 | [+0,1452, +0,2242] |
+| MRR@10 | 0,3686 | 0,4038 | +0,0352 | [+0,0015, +0,0673] |
+| NDCG@10 | 0,3743 | 0,4678 | +0,0935 | [+0,0623, +0,1231] |
 
-Pada Hit@5, kedua strategi berhasil untuk 216 pertanyaan, hanya SAC berhasil
-untuk 192, hanya fixed-size berhasil untuk 133, dan keduanya gagal untuk 99.
-Hit@50 yang setara menunjukkan keunggulan SAC terutama berasal dari penempatan
-bukti lebih awal, bukan peningkatan coverage kandidat pada depth 50.
+### Metrik @5 per bagian
 
-### Hit@5 per bagian
+| Bagian | N | Fixed Recall | SAC Recall | Fixed MRR | SAC MRR | Fixed NDCG | SAC NDCG |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Amar putusan | 160 | 0,2750 | 0,7812 | 0,1652 | 0,3214 | 0,1880 | 0,4348 |
+| Identitas terdakwa | 155 | 0,7355 | 0,9613 | 0,5676 | 0,9454 | 0,6096 | 0,9493 |
+| Pertimbangan hukum | 160 | 0,1976 | 0,0445 | 0,3139 | 0,0602 | 0,1853 | 0,0367 |
+| Riwayat dakwaan | 160 | 0,5250 | 0,6750 | 0,3937 | 0,2584 | 0,4169 | 0,3608 |
+| Riwayat penahanan | 5 | 0,6000 | 0,0000 | 0,2167 | 0,0000 | 0,3123 | 0,0000 |
 
-| Bagian | N | Fixed-size | SAC |
-|---|---:|---:|---:|
-| Amar putusan | 160 | 0,5062 | 0,7812 |
-| Identitas terdakwa | 155 | 0,5032 | 0,9613 |
-| Pertimbangan hukum | 160 | 0,7562 | 0,1625 |
-| Riwayat dakwaan | 160 | 0,4250 | 0,6750 |
-| Riwayat penahanan | 5 | 0,2000 | 0,0000 |
-
-## Batas klaim dan langkah berikutnya
+## Batas klaim dan status penelitian
 
 Pertanyaan dan span bukti dibuat dengan aturan deterministik dari XML dan belum
 menjadi gold set hasil anotasi manusia. Untuk pertanyaan ketentuan pidana, semua
-kemunculan pasal yang ekuivalen di dalam section pertimbangan diberi relevansi
-agar strategi tidak dihukum karena mengambil kemunculan yang berbeda.
+kemunculan pasal yang ekuivalen di dalam section pertimbangan diberi relevansi.
 
-Klaim yang didukung adalah: SAC oracle-structure lebih baik untuk Hit@5 agregat
-pada corpus Indo-Law ternormalisasi ini. Klaim belum mencakup PDF mentah,
-deteksi section otomatis, kualitas jawaban generator, atau domain hukum di luar
-putusan narkotika. Eksperimen lanjutan sebaiknya menguji routing berbasis tipe
-query atau index hibrida—SAC untuk bagian terstruktur dan fixed-size untuk
-pertimbangan hukum—dengan pemilihan hanya pada development dan sebuah holdout
-baru agar hasil 160 dokumen ini tidak dipakai untuk tuning ulang.
+Holdout telah dibuka sebelum koreksi metrik dilakukan. Walaupun desain baru
+dipilih ulang secara mekanis hanya dari development, hasil ini harus disebut
+**corrected analysis of a previously opened holdout**, bukan validasi
+konfirmatori baru yang sepenuhnya buta.
+
+Klaim sementara yang didukung adalah SAC oracle-structure meningkatkan coverage
+dan kualitas ranking agregat pada corpus Indo-Law ternormalisasi. Penelitian
+skripsi belum selesai karena evaluasi kualitas jawaban (Faithfulness, Answer
+Relevance, dan BERTScore), evaluasi latency yang direncanakan, serta validasi
+pada pipeline PDF/deteksi section otomatis belum lengkap.

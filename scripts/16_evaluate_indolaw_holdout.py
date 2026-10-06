@@ -72,13 +72,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "Normalized XML text with corpus-provided section boundaries; this is an "
         "oracle-structure robustness study, not a PDF extraction evaluation."
     )
-    result["hit5_outcomes"] = _hit_outcomes(result)
     markdown = render_markdown(result)
     markdown += (
         "\n## Desain dan batas interpretasi\n\n"
         f"Fixed-size: `{fixed_name}`; structure-aware: `{structure_name}`. "
         "Keduanya dipilih hanya pada development 40 dokumen.\n\n"
-        f"Hit@5 paired outcomes: {result['hit5_outcomes']}.\n\n"
         "Corpus menggunakan teks XML ternormalisasi dan batas section dari Indo-Law. "
         "Hasil ini menguji oracle-structure chunking dan tidak mencakup error ekstraksi PDF "
         "atau deteksi section otomatis.\n"
@@ -92,24 +90,6 @@ def main(argv: Sequence[str] | None = None) -> None:
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as file:
         return list(csv.DictReader(file))
-
-
-def _hit_outcomes(result: dict) -> dict[str, int]:
-    fixed = result["strategies"]["fixed_size"]["overall"]["per_query"]
-    structure = result["strategies"]["structure_aware"]["overall"]["per_query"]
-    outcomes = {"both_hit": 0, "structure_only": 0, "fixed_only": 0, "neither_hit": 0}
-    for query_id in fixed:
-        fixed_hit = bool(fixed[query_id]["hit@5"])
-        structure_hit = bool(structure[query_id]["hit@5"])
-        if fixed_hit and structure_hit:
-            outcomes["both_hit"] += 1
-        elif structure_hit:
-            outcomes["structure_only"] += 1
-        elif fixed_hit:
-            outcomes["fixed_only"] += 1
-        else:
-            outcomes["neither_hit"] += 1
-    return outcomes
 
 
 if __name__ == "__main__":

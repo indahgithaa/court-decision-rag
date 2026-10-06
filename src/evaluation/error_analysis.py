@@ -52,11 +52,11 @@ def analyze_retrieval_errors(
             )
             top_k = ranking[:k]
             if relevant_rank is not None and relevant_rank <= k:
-                status = "relevant_hit"
+                status = "relevant_found"
             elif any(
                 str(item["retrieved_document_id"]) == target_document for item in top_k
             ):
-                status = "document_hit_chunk_miss"
+                status = "document_found_chunk_miss"
             else:
                 status = "document_miss"
             top = top_k[0] if top_k else None
@@ -94,16 +94,16 @@ def analyze_retrieval_errors(
     for query_id in sorted(question_by_id):
         fixed = detail_index[(query_id, "fixed_size")]
         structure = detail_index[(query_id, "structure_aware")]
-        fixed_hit = fixed["status_at_k"] == "relevant_hit"
-        structure_hit = structure["status_at_k"] == "relevant_hit"
-        if fixed_hit and structure_hit:
-            outcome = "both_hit"
-        elif structure_hit:
+        fixed_found = fixed["status_at_k"] == "relevant_found"
+        structure_found = structure["status_at_k"] == "relevant_found"
+        if fixed_found and structure_found:
+            outcome = "both_found"
+        elif structure_found:
             outcome = "structure_only"
-        elif fixed_hit:
+        elif fixed_found:
             outcome = "fixed_only"
         else:
-            outcome = "neither_hit"
+            outcome = "neither_found"
         paired.append(
             {
                 "query_id": query_id,
@@ -141,14 +141,14 @@ def render_error_markdown(result: Mapping[str, Any]) -> str:
         "",
         "## Jenis hasil per strategi",
         "",
-        "| Strategi | Relevant hit | Dokumen benar, chunk salah | Dokumen tidak ditemukan |",
+        "| Strategi | Chunk relevan ditemukan | Dokumen benar, chunk salah | Dokumen tidak ditemukan |",
         "|---|---:|---:|---:|",
     ]
     for strategy in STRATEGIES:
         counts = result["strategy_summary"][strategy]["status_counts"]
         lines.append(
-            f"| `{strategy}` | {counts.get('relevant_hit', 0)} | "
-            f"{counts.get('document_hit_chunk_miss', 0)} | "
+            f"| `{strategy}` | {counts.get('relevant_found', 0)} | "
+            f"{counts.get('document_found_chunk_miss', 0)} | "
             f"{counts.get('document_miss', 0)} |"
         )
 
@@ -160,10 +160,10 @@ def render_error_markdown(result: Mapping[str, Any]) -> str:
             "",
             "| Outcome | Jumlah |",
             "|---|---:|",
-            f"| Keduanya berhasil | {paired.get('both_hit', 0)} |",
+            f"| Keduanya berhasil | {paired.get('both_found', 0)} |",
             f"| Hanya structure-aware | {paired.get('structure_only', 0)} |",
             f"| Hanya fixed-size | {paired.get('fixed_only', 0)} |",
-            f"| Keduanya gagal | {paired.get('neither_hit', 0)} |",
+            f"| Keduanya gagal | {paired.get('neither_found', 0)} |",
             "",
             "## Perbandingan per bagian",
             "",
@@ -173,9 +173,9 @@ def render_error_markdown(result: Mapping[str, Any]) -> str:
     )
     for label, counts in result["paired_by_section"].items():
         lines.append(
-            f"| `{label}` | {counts.get('both_hit', 0)} | "
+            f"| `{label}` | {counts.get('both_found', 0)} | "
             f"{counts.get('structure_only', 0)} | {counts.get('fixed_only', 0)} | "
-            f"{counts.get('neither_hit', 0)} |"
+            f"{counts.get('neither_found', 0)} |"
         )
 
     lines.extend(["", "## Kemenangan satu strategi", ""])

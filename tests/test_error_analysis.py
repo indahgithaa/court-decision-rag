@@ -47,12 +47,12 @@ def test_error_analysis_separates_document_and_chunk_misses() -> None:
     result = analyze_retrieval_errors(questions, qrels, runs, chunks, k=1)
 
     assert result["strategy_summary"]["fixed_size"]["status_counts"] == {
-        "document_hit_chunk_miss": 1,
-        "relevant_hit": 1,
+        "document_found_chunk_miss": 1,
+        "relevant_found": 1,
     }
     assert result["strategy_summary"]["structure_aware"]["status_counts"] == {
         "document_miss": 1,
-        "relevant_hit": 1,
+        "relevant_found": 1,
     }
     assert result["paired_summary"] == {"fixed_only": 1, "structure_only": 1}
     assert "Hanya structure-aware" in render_error_markdown(result)

@@ -1,10 +1,11 @@
-"""Plan a powered document-level holdout from paired pilot Hit@k outcomes."""
+"""Plan a powered document-level holdout from paired pilot Recall@K outcomes."""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import statistics
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
@@ -12,7 +13,7 @@ from typing import Any, Sequence
 from src.evaluation.sample_size import (
     cluster_adjusted_plan,
     estimate_equal_cluster_icc,
-    matched_binary_sample_size,
+    paired_mean_sample_size,
 )
 from src.utils.io import read_jsonl
 
@@ -64,7 +65,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     pilot = summarize_pilot(qrel_rows, runs, k=args.k)
     plans: list[dict[str, Any]] = []
     for effect in args.effects:
-        independent = matched_binary_sample_size(effect, pilot["discordance_rate"])
+        independent = paired_mean_sample_size(
+            effect, pilot["difference_standard_deviation"]
+        )
         for icc in args.icc_scenarios:
             adjusted = cluster_adjusted_plan(
                 independent,
@@ -81,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
 
     result = {
-        "method": "normal approximation for paired binary outcomes with cluster design-effect sensitivity",
+        "method": "normal approximation for paired Recall@K differences with cluster design-effect sensitivity",
         "alpha": 0.05,
         "power": 0.80,
         "questions_per_document": args.questions_per_document,
@@ -111,44 +114,43 @@ def summarize_pilot(
         if float(row["relevance_grade"]) > 0:
             relevant[row["strategy"]][query_id].add(row["chunk_id"])
 
-    hits: dict[str, dict[str, int]] = {}
+    recalls: dict[str, dict[str, float]] = {}
     for strategy in STRATEGIES:
-        strategy_hits: dict[str, int] = {}
+        strategy_recalls: dict[str, float] = {}
         for record in runs[strategy]:
             ranking = sorted(record["ranking"], key=lambda item: int(item["rank"]))
             retrieved = {item["chunk_id"] for item in ranking[:k]}
             query_id = str(record["query_id"])
-            strategy_hits[query_id] = int(bool(retrieved & relevant[strategy][query_id]))
-        hits[strategy] = strategy_hits
+            relevant_chunks = relevant[strategy][query_id]
+            if not relevant_chunks:
+                raise ValueError(f"query has no relevant chunks: {query_id}")
+            strategy_recalls[query_id] = len(retrieved & relevant_chunks) / len(
+                relevant_chunks
+            )
+        recalls[strategy] = strategy_recalls
 
     query_ids = sorted(documents)
-    if any(set(hits[strategy]) != set(query_ids) for strategy in STRATEGIES):
+    if any(set(recalls[strategy]) != set(query_ids) for strategy in STRATEGIES):
         raise ValueError("run and qrel query IDs do not match")
     differences_by_document: dict[str, list[float]] = defaultdict(list)
-    structure_only = fixed_only = both = neither = 0
+    differences: list[float] = []
     for query_id in query_ids:
-        fixed = hits["fixed_size"][query_id]
-        structure = hits["structure_aware"][query_id]
-        differences_by_document[documents[query_id]].append(float(structure - fixed))
-        if fixed and structure:
-            both += 1
-        elif structure:
-            structure_only += 1
-        elif fixed:
-            fixed_only += 1
-        else:
-            neither += 1
+        difference = (
+            recalls["structure_aware"][query_id]
+            - recalls["fixed_size"][query_id]
+        )
+        differences.append(difference)
+        differences_by_document[documents[query_id]].append(difference)
 
-    discordant = structure_only + fixed_only
     return {
         "query_count": len(query_ids),
         "document_count": len(differences_by_document),
-        "both_hit": both,
-        "structure_only": structure_only,
-        "fixed_only": fixed_only,
-        "neither_hit": neither,
-        "discordance_rate": discordant / len(query_ids),
-        "observed_hit_difference": (structure_only - fixed_only) / len(query_ids),
+        "fixed_mean_recall": statistics.fmean(recalls["fixed_size"].values()),
+        "structure_mean_recall": statistics.fmean(
+            recalls["structure_aware"].values()
+        ),
+        "observed_recall_difference": statistics.fmean(differences),
+        "difference_standard_deviation": statistics.stdev(differences),
         "estimated_icc": estimate_equal_cluster_icc(differences_by_document),
     }
 
@@ -159,7 +161,8 @@ def render_markdown(result: dict[str, Any], *, k: int) -> str:
         "# Perencanaan ukuran holdout retrieval",
         "",
         f"Pilot: {pilot['query_count']} pertanyaan dalam {pilot['document_count']} dokumen; "
-        f"discordance Hit@{k} = {pilot['discordance_rate']:.3f}; "
+        f"selisih Recall@{k} = {pilot['observed_recall_difference']:+.3f}; "
+        f"SD selisih = {pilot['difference_standard_deviation']:.3f}; "
         f"ICC selisih berpasangan = {pilot['estimated_icc']:.3f}.",
         "",
         "| MDE absolut | Asumsi ICC | Design effect | Query independen | Dokumen | Query aktual |",
@@ -174,7 +177,8 @@ def render_markdown(result: dict[str, Any], *, k: int) -> str:
     lines.extend(
         [
             "",
-            "Perhitungan memakai pendekatan normal McNemar dua sisi (alpha 0,05; power 0,80) "
+            "Perhitungan memakai pendekatan normal selisih berpasangan dua sisi "
+            "(alpha 0,05; power 0,80) "
             "dan inflasi design effect untuk empat pertanyaan per dokumen. Angka ini adalah "
             "panduan perencanaan, bukan hasil inferensial.",
             "",

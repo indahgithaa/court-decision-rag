@@ -22,8 +22,7 @@ Desain ini mengadaptasi, tetapi tidak menyamakan, beberapa hasil penelitian:
   Evaluation of Information
   Retrieval Models*](https://datasets-benchmarks-proceedings.neurips.cc/paper/2021/hash/65b9eea6e1cc6bb9f0cd2a47751a186f-Abstract-round2.html),
   memotivasi pelaporan metrik ranking terstandardisasi dan evaluasi lintas tipe
-  query. Cutoff primer repo ini tetap Hit@5 karena corpus pilot kecil dan jumlah
-  relevant chunks berubah akibat strategi overlap.
+  query. Repo ini melaporkan Recall@K, MRR, dan NDCG@K sesuai rancangan skripsi.
 
 Konsekuensinya, variabel yang boleh berubah pada eksperimen utama hanya strategi
 chunking. Corpus dokumen, pertanyaan, model embedding, fungsi similarity, dan
@@ -139,9 +138,8 @@ atau `0` bila tidak cukup.
    parameter retrieval sebelum menjalankan holdout.
 3. Bangun dua index dari corpus yang sama, satu index per strategi.
 4. Jalankan setiap pertanyaan pada kedua index dengan nilai `k` yang sama.
-5. Gunakan Hit@5 sebagai metrik primer karena jumlah chunk relevan dapat berbeda
-   akibat overlap. Laporkan juga Hit@1/3/10, MRR@1/3/5/10, nDCG@1/3/5/10, dan
-   Recall@1/3/5/10 secara keseluruhan serta per `target_section_label`.
+5. Laporkan Recall@1/3/5/10, MRR@1/3/5/10, dan NDCG@1/3/5/10 secara keseluruhan
+   serta per `target_section_label`.
 6. Hitung selisih skor per pertanyaan antara SAC dan fixed-size. Karena empat
    pertanyaan dari putusan yang sama tidak independen, laporkan interval
    kepercayaan dengan *paired cluster bootstrap*: resample dokumen, lalu bawa
@@ -155,8 +153,9 @@ Benchmark robustness memakai 200 dokumen XML ternormalisasi dari Indo-Law.
 Split dilakukan berdasarkan pengadilan: 40 dokumen development untuk memilih
 desain dan 160 dokumen holdout untuk satu evaluasi final. Grid development
 menguji ukuran 150, 300, dan 500 kata dengan overlap 20% pada kedua keluarga.
-Aturan seleksi adalah Hit@5, lalu MRR@5, nDCG@5, dan jumlah chunk yang lebih
-kecil. Desain yang dibekukan adalah `fixed_w300_o60` dan `sac_w150_o30_s0`.
+Aturan seleksi adalah NDCG@5, lalu MRR@5, Recall@5, dan jumlah chunk yang lebih
+kecil. Setelah evaluator diselaraskan dengan metrik skripsi, desain yang
+terpilih adalah `fixed_w500_o100` dan `sac_w150_o30_s0`.
 
 Setiap dokumen memiliki empat pertanyaan deterministik berbasis span. Untuk
 pertanyaan ketentuan pidana, setiap kemunculan pasal ekuivalen dalam section
@@ -186,11 +185,12 @@ serta bobot dense yang identik untuk kedua strategi. Sweep bobot dilaksanakan
 pada `exploration_20`; semua titik harus dilaporkan agar pemilihan konfigurasi
 tidak menyembunyikan hasil yang berlawanan.
 
-Operating point pilot dipilih berdasarkan rata-rata Hit@5 kedua strategi,
-kemudian rata-rata MRR@5, lalu bobot dense yang lebih besar sebagai tie-breaker.
+Operating point pilot dipilih berdasarkan rata-rata NDCG@5 kedua strategi,
+kemudian rata-rata MRR@5, Recall@5, lalu bobot dense yang lebih besar sebagai
+tie-breaker.
 Bobot terpilih dibekukan sebelum holdout dan tidak boleh dituning ulang dari
-hasil holdout. Candidate Hit@50 dilaporkan sebagai ceiling: reranker tidak dapat
-memulihkan chunk relevan yang tidak masuk kandidat dense awal.
+hasil holdout. Candidate Recall@50 dilaporkan sebagai coverage: reranker tidak
+dapat memulihkan chunk relevan yang tidak masuk kandidat dense awal.
 
 Jika konfigurasi diubah setelah melihat hasil pilot, catat perubahan dan
 alasannya. Konfigurasi tersebut kemudian dibekukan sebelum evaluasi holdout.
@@ -198,8 +198,9 @@ alasannya. Konfigurasi tersebut kemudian dibekukan sebelum evaluasi holdout.
 ## Perencanaan ukuran holdout
 
 Sebelum mengumpulkan holdout, jalankan `scripts/10_plan_holdout.py`. Script ini
-mengestimasi discordance Hit@5 dari pilot, lalu menghitung kebutuhan pasangan
-untuk beberapa minimum detectable effect (MDE). Karena unit sampling adalah
+mengestimasi simpangan baku selisih Recall@5 berpasangan dari pilot, lalu
+menghitung kebutuhan pasangan untuk beberapa minimum detectable effect (MDE).
+Karena unit sampling adalah
 dokumen dan terdapat empat pertanyaan per dokumen, tabel sensitivitas juga
 menginflasi kebutuhan dengan design effect untuk beberapa asumsi intraclass
 correlation (ICC). MDE, power, dan target dokumen harus dibekukan sebelum hasil

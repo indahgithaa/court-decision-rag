@@ -21,9 +21,7 @@ def test_evaluate_retrieval_scores_ranked_results_and_missing_runs() -> None:
 
     assert score["query_count"] == 2
     assert score["per_query"]["q1"]["recall@1"] == 0
-    assert score["per_query"]["q1"]["hit@1"] == 0
     assert score["per_query"]["q1"]["recall@3"] == 1
-    assert score["per_query"]["q1"]["hit@3"] == 1
     assert score["per_query"]["q1"]["mrr@3"] == 0.5
     assert 0 < score["per_query"]["q1"]["ndcg@3"] < 1
     assert score["per_query"]["q2"]["recall@3"] == 0

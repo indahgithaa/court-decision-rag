@@ -189,37 +189,42 @@ def render_markdown(result: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Candidate coverage",
+            "## Recall berdasarkan cutoff",
             "",
-            "| Cutoff | Fixed-size Hit@k | Structure-aware Hit@k | SAC - fixed |",
+            "| Cutoff | Fixed-size Recall@K | Structure-aware Recall@K | SAC - fixed |",
             "|---:|---:|---:|---:|",
         ]
     )
     for k in result["cutoffs"]:
-        metric = f"hit@{k}"
+        metric = f"recall@{k}"
         lines.append(
             f"| {k} | {fixed[metric]:.4f} | {structure[metric]:.4f} | "
             f"{paired[metric]['mean_difference']:+.4f} |"
         )
 
     section_cutoff = 5 if 5 in result["cutoffs"] else max(result["cutoffs"])
-    section_metric = f"hit@{section_cutoff}"
     lines.extend(
         [
             "",
-            f"## Hit@{section_cutoff} per bagian",
+            f"## Metrik @{section_cutoff} per bagian",
             "",
-            "| Bagian | N | Fixed-size | Structure-aware |",
-            "|---|---:|---:|---:|",
+            "| Bagian | N | Fixed Recall | SAC Recall | Fixed MRR | SAC MRR | Fixed nDCG | SAC nDCG |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     fixed_sections = strategies["fixed_size"]["by_section"]
     structure_sections = strategies["structure_aware"]["by_section"]
     for label in fixed_sections:
+        fixed_aggregate = fixed_sections[label]["aggregate"]
+        structure_aggregate = structure_sections[label]["aggregate"]
         lines.append(
             f"| `{label}` | {fixed_sections[label]['query_count']} | "
-            f"{fixed_sections[label]['aggregate'][section_metric]:.4f} | "
-            f"{structure_sections[label]['aggregate'][section_metric]:.4f} |"
+            f"{fixed_aggregate[f'recall@{section_cutoff}']:.4f} | "
+            f"{structure_aggregate[f'recall@{section_cutoff}']:.4f} | "
+            f"{fixed_aggregate[f'mrr@{section_cutoff}']:.4f} | "
+            f"{structure_aggregate[f'mrr@{section_cutoff}']:.4f} | "
+            f"{fixed_aggregate[f'ndcg@{section_cutoff}']:.4f} | "
+            f"{structure_aggregate[f'ndcg@{section_cutoff}']:.4f} |"
         )
 
     lines.extend(

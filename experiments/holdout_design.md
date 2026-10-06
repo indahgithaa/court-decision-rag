@@ -2,8 +2,9 @@
 
 ## Keputusan corpus 200 dokumen
 
-Outcome primer adalah selisih corpus-wide Hit@5 antara structure-aware chunking
-dan fixed-size chunking. Corpus eksternal dibekukan pada **200 dokumen** dan
+Evaluasi retrieval membandingkan Recall@K, MRR, dan NDCG@K antara
+structure-aware chunking dan fixed-size chunking. Corpus eksternal dibekukan
+pada **200 dokumen** dan
 dibagi berdasarkan pengadilan menjadi 40 dokumen development dan 160 dokumen
 holdout. Development digunakan untuk memilih desain dari awal; holdout baru
 dibuka setelah konfigurasi dibekukan. Dengan empat pertanyaan per dokumen,
@@ -12,7 +13,7 @@ evaluasi terkunci berisi 640 pertanyaan.
 Analisis final menggunakan paired cluster bootstrap pada unit dokumen. Seluruh
 pertanyaan dari dokumen yang terpilih harus ikut dalam replikasi yang sama.
 
-Evaluasi telah selesai dengan desain development-frozen `fixed_w300_o60` dan
+Corrected analysis menggunakan desain development-frozen `fixed_w500_o100` dan
 `sac_w150_o30_s0`. Ringkasan keputusan dan batas klaim tercatat di
 `experiments/indolaw_200_research_decision.md`.
 

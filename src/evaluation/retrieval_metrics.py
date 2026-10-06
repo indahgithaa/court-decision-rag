@@ -38,7 +38,6 @@ def evaluate_retrieval(
         ranking = _deduplicate(runs.get(query_id, ()))
         result: dict[str, float] = {}
         for k in cutoffs:
-            result[f"hit@{k}"] = hit_rate_at_k(relevance, ranking, k)
             result[f"recall@{k}"] = recall_at_k(relevance, ranking, k)
             result[f"mrr@{k}"] = reciprocal_rank_at_k(relevance, ranking, k)
             result[f"ndcg@{k}"] = ndcg_at_k(relevance, ranking, k)
@@ -65,16 +64,6 @@ def recall_at_k(
     if not relevant:
         raise ValueError("relevance must contain at least one positive value")
     return len(relevant.intersection(ranking[:k])) / len(relevant)
-
-
-def hit_rate_at_k(
-    relevance: Mapping[str, float], ranking: Sequence[str], k: int
-) -> float:
-    """Return one when at least one relevant chunk occurs in the first ``k``."""
-    _validate_k(k)
-    if not any(value > 0 for value in relevance.values()):
-        raise ValueError("relevance must contain at least one positive value")
-    return float(any(relevance.get(chunk_id, 0) > 0 for chunk_id in ranking[:k]))
 
 
 def reciprocal_rank_at_k(

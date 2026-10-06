@@ -47,14 +47,14 @@ def test_paired_report_compares_structure_aware_with_fixed_size() -> None:
         seed=7,
     )
 
-    assert result["strategies"]["fixed_size"]["overall"]["aggregate"]["hit@1"] == 0
-    assert result["strategies"]["structure_aware"]["overall"]["aggregate"]["hit@1"] == 1
-    assert result["paired_difference"]["hit@1"]["mean_difference"] == 1
+    assert result["strategies"]["fixed_size"]["overall"]["aggregate"]["recall@1"] == 0
+    assert result["strategies"]["structure_aware"]["overall"]["aggregate"]["recall@1"] == 1
+    assert result["paired_difference"]["recall@1"]["mean_difference"] == 1
     assert result["bootstrap_unit"] == "document"
     assert result["document_count"] == 2
     markdown = render_markdown(result)
     assert "SAC - fixed" in markdown
-    assert "## Candidate coverage" in markdown
+    assert "## Recall berdasarkan cutoff" in markdown
     assert "| 5 | 0.5000 | 1.0000 | +0.5000 |" in markdown
 
 
