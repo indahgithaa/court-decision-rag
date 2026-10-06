@@ -18,6 +18,10 @@ dependencies = [
 retrieval = [
   "sentence-transformers>=3.0,<6.0",
 ]
+answer-evaluation = [
+  "bert-score==0.3.13",
+  "ragas==0.4.3",
+]
 
 [project.scripts]
 court-rag-extract = "src.cli:extract_main"
