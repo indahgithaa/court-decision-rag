@@ -9,7 +9,13 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
 
-from src.chunking import FixedSizeChunker, StructureAwareChunker
+from src.chunking import (
+    BaseChunker,
+    FixedSizeChunker,
+    HierarchicalSummaryAugmentedChunker,
+    StructureAwareChunker,
+    SummaryAugmentedChunker,
+)
 from src.evaluation.ground_truth import build_qrel_candidates
 from src.utils.io import read_jsonl, write_jsonl
 
@@ -43,6 +49,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--chunks-root", type=Path, default=Path("data/chunks/indolaw_200")
     )
+    parser.add_argument(
+        "--summaries-root",
+        type=Path,
+        default=Path("data/processed/indolaw_200/document_summaries"),
+        help="Directory containing one <split>.jsonl document-summary file.",
+    )
     parser.add_argument("--splits", nargs="+", default=("development", "holdout"))
     parser.add_argument(
         "--designs",
@@ -51,20 +63,62 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    available_designs = dict(design_grid(include_experimental=True))
     selected_names = args.designs or [name for name, _ in design_grid()]
-    unknown = sorted(set(selected_names) - set(available_designs))
+    all_names = {
+        name
+        for name, _ in design_grid(
+            include_experimental=True,
+            summaries={},
+            hierarchical_contexts={},
+        )
+    }
+    unknown = sorted(set(selected_names) - all_names)
     if unknown:
         raise ValueError(f"Unknown design(s): {', '.join(unknown)}")
 
     for split in args.splits:
         pages = list(read_jsonl(args.processed_root / split / "pages.jsonl"))
         sections = list(read_jsonl(args.processed_root / split / "sections.jsonl"))
+        summary_design_requested = any(
+            name.startswith(("summary_fixed_", "hybrid_"))
+            for name in selected_names
+        )
+        summaries: dict[str, str] = {}
+        hierarchical_contexts: dict[str, dict[str, Any]] = {}
+        if summary_design_requested:
+            summary_path = args.summaries_root / f"{split}.jsonl"
+            summary_rows = list(read_jsonl(summary_path))
+            summaries = {
+                str(row["document_id"]): str(row["summary"])
+                for row in summary_rows
+            }
+            hierarchical_contexts = {
+                str(row["document_id"]): {
+                    "document_context": str(row["document_context"]),
+                    "section_contexts": dict(row["section_contexts"]),
+                }
+                for row in summary_rows
+                if "document_context" in row and "section_contexts" in row
+            }
+        available_designs = dict(
+            design_grid(
+                include_experimental=True,
+                summaries=summaries,
+                hierarchical_contexts=hierarchical_contexts,
+            )
+        )
         with (args.questions_root / f"{split}_questions.csv").open(
             "r", encoding="utf-8-sig", newline=""
         ) as file:
             questions = list(csv.DictReader(file))
         text_by_document = {str(page["document_id"]): str(page["clean_text"]) for page in pages}
+        if summary_design_requested and set(summaries) != set(text_by_document):
+            missing = sorted(set(text_by_document) - set(summaries))
+            extra = sorted(set(summaries) - set(text_by_document))
+            raise ValueError(
+                f"Summary/document mismatch for {split}: "
+                f"missing={missing[:5]}, extra={extra[:5]}"
+            )
         sections_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for section in sections:
             sections_by_document[str(section["document_id"])].append(section)
@@ -115,10 +169,13 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 
 def design_grid(
-    *, include_experimental: bool = False
-) -> list[tuple[str, FixedSizeChunker | StructureAwareChunker]]:
+    *,
+    include_experimental: bool = False,
+    summaries: dict[str, str] | None = None,
+    hierarchical_contexts: dict[str, dict[str, Any]] | None = None,
+) -> list[tuple[str, BaseChunker]]:
     """Return legacy candidates and optional post-hoc development ablations."""
-    designs: list[tuple[str, FixedSizeChunker | StructureAwareChunker]] = []
+    designs: list[tuple[str, BaseChunker]] = []
     for size in (150, 300, 500):
         overlap = size // 5
         designs.append(
@@ -190,6 +247,78 @@ def design_grid(
                 ),
             ]
         )
+        if summaries is not None:
+            for size in (150, 300, 500):
+                overlap = size // 5
+                designs.extend(
+                    [
+                        (
+                            f"summary_fixed_w{size}_o{overlap}",
+                            SummaryAugmentedChunker(
+                                FixedSizeChunker(
+                                    max_words=size,
+                                    overlap_words=overlap,
+                                ),
+                                summaries,
+                                strategy="summary_augmented_fixed",
+                            ),
+                        ),
+                        (
+                            f"hybrid_w{size}_o{overlap}_s0",
+                            SummaryAugmentedChunker(
+                                StructureAwareChunker(
+                                    max_words=size,
+                                    overlap_words=overlap,
+                                    overlap_sentences=0,
+                                ),
+                                summaries,
+                                strategy="structure_summary_augmented",
+                            ),
+                        ),
+                        (
+                            f"hybrid_rr_w{size}_o{overlap}_s0",
+                            SummaryAugmentedChunker(
+                                StructureAwareChunker(
+                                    max_words=size,
+                                    overlap_words=overlap,
+                                    overlap_sentences=0,
+                                    embedding_context="section",
+                                ),
+                                summaries,
+                                strategy="structure_summary_role_augmented",
+                            ),
+                        ),
+                    ]
+                )
+        if hierarchical_contexts is not None:
+            document_contexts = {
+                document_id: str(values["document_context"])
+                for document_id, values in hierarchical_contexts.items()
+            }
+            section_contexts = {
+                document_id: {
+                    str(label): str(context)
+                    for label, context in dict(values["section_contexts"]).items()
+                }
+                for document_id, values in hierarchical_contexts.items()
+            }
+            for size in (150, 300, 500):
+                overlap = size // 5
+                designs.append(
+                    (
+                        f"hybrid_hier_w{size}_o{overlap}_s0",
+                        HierarchicalSummaryAugmentedChunker(
+                            StructureAwareChunker(
+                                max_words=size,
+                                overlap_words=overlap,
+                                overlap_sentences=0,
+                            ),
+                            document_contexts,
+                            section_contexts,
+                            strategy="hierarchical_structure_summary_augmented",
+                        ),
+                    )
+                )
     return designs
 
 

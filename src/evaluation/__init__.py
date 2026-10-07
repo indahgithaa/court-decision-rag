@@ -4,6 +4,7 @@ from src.evaluation.error_analysis import (
     analyze_retrieval_errors,
     render_error_markdown,
 )
+from src.evaluation.document_retrieval_metrics import evaluate_document_retrieval
 from src.evaluation.ground_truth import (
     build_qrel_candidates,
     join_clean_pages,
@@ -39,6 +40,7 @@ __all__ = [
     "analyze_retrieval_errors",
     "build_qrel_candidates",
     "evidence_recall_at_k",
+    "evaluate_document_retrieval",
     "evaluate_retrieval",
     "evaluate_paired_runs",
     "paired_cluster_bootstrap_interval",

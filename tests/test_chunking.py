@@ -2,7 +2,12 @@
 
 import pytest
 
-from src.chunking import FixedSizeChunker, StructureAwareChunker
+from src.chunking import (
+    FixedSizeChunker,
+    HierarchicalSummaryAugmentedChunker,
+    StructureAwareChunker,
+    SummaryAugmentedChunker,
+)
 
 
 def test_fixed_size_chunker_uses_configured_overlap() -> None:
@@ -317,6 +322,137 @@ def test_structure_aware_adaptive_context_limits_identity_to_reasoning() -> None
     assert "perkara terdakwa: Siti Aminah" in (
         by_label["pertimbangan_hukum"].embedding_text or ""
     )
+
+
+def test_summary_augmented_structure_chunking_preserves_source_evidence() -> None:
+    text = "identitas singkat\nmenimbang bahwa unsur pasal terpenuhi"
+    reasoning_start = text.index("menimbang")
+    sections = [
+        {
+            "section_label": "identitas_terdakwa",
+            "start_position": 0,
+            "end_position": reasoning_start - 1,
+            "section_text": text[: reasoning_start - 1],
+        },
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": reasoning_start,
+            "end_position": len(text),
+            "section_text": text[reasoning_start:],
+        },
+    ]
+    chunker = SummaryAugmentedChunker(
+        StructureAwareChunker(
+            max_words=20,
+            overlap_words=0,
+            overlap_sentences=0,
+        ),
+        {"doc": "Putusan perkara narkotika terdakwa Siti Aminah."},
+        strategy="structure_summary_augmented",
+    )
+
+    chunks = chunker.chunk("doc", text, sections=sections)
+    reasoning = next(
+        chunk for chunk in chunks if chunk.section_label == "pertimbangan_hukum"
+    )
+
+    assert reasoning.strategy == "structure_summary_augmented"
+    assert reasoning.text == text[reasoning.start_position : reasoning.end_position]
+    assert reasoning.embedding_text == (
+        "ringkasan dokumen: Putusan perkara narkotika terdakwa Siti Aminah.\n\n"
+        + reasoning.text
+    )
+    assert reasoning.chunk_id != chunks[0].chunk_id
+
+
+def test_summary_augmented_structure_chunking_can_retain_role_tag() -> None:
+    text = "menimbang bahwa unsur pasal terpenuhi"
+    sections = [
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": 0,
+            "end_position": len(text),
+            "section_text": text,
+        }
+    ]
+    chunker = SummaryAugmentedChunker(
+        StructureAwareChunker(
+            max_words=20,
+            overlap_words=0,
+            overlap_sentences=0,
+            embedding_context="section",
+        ),
+        {"doc": "perkara narkotika terdakwa Siti Aminah"},
+        strategy="structure_summary_role_augmented",
+    )
+
+    [chunk] = chunker.chunk("doc", text, sections=sections)
+
+    assert chunk.text == text
+    assert chunk.embedding_text == (
+        "ringkasan dokumen: perkara narkotika terdakwa Siti Aminah\n\n"
+        "bagian dokumen: pertimbangan hukum.\n"
+        + text
+    )
+
+
+def test_summary_augmented_chunking_requires_bounded_summary() -> None:
+    chunker = SummaryAugmentedChunker(
+        FixedSizeChunker(max_words=10, overlap_words=0),
+        {"doc": "ringkasan terlalu panjang"},
+        max_summary_chars=10,
+    )
+
+    with pytest.raises(ValueError, match="maximum is 10"):
+        chunker.chunk("doc", "teks sumber")
+
+
+def test_hierarchical_summary_augmentation_uses_matching_section_only() -> None:
+    text = "dakwaan terdakwa\nmenimbang pasal"
+    reasoning_start = text.index("menimbang")
+    sections = [
+        {
+            "section_label": "riwayat_dakwaan",
+            "start_position": 0,
+            "end_position": reasoning_start - 1,
+            "section_text": text[: reasoning_start - 1],
+        },
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": reasoning_start,
+            "end_position": len(text),
+            "section_text": text[reasoning_start:],
+        },
+    ]
+    chunker = HierarchicalSummaryAugmentedChunker(
+        StructureAwareChunker(max_words=20, overlap_words=0),
+        {"doc": "perkara satu terdakwa siti"},
+        {
+            "doc": {
+                "riwayat_dakwaan": "bagian dokumen riwayat dakwaan",
+                "pertimbangan_hukum": (
+                    "bagian dokumen pertimbangan hukum; pasal 112 ayat 1"
+                ),
+            }
+        },
+    )
+
+    chunks = chunker.chunk("doc", text, sections=sections)
+
+    charge, reasoning = chunks
+    assert "pasal 112" not in (charge.embedding_text or "")
+    assert "pasal 112 ayat 1" in (reasoning.embedding_text or "")
+    assert all(chunk.text == text[chunk.start_position : chunk.end_position] for chunk in chunks)
+
+
+def test_summary_augmented_chunking_rejects_missing_document_summary() -> None:
+    chunker = SummaryAugmentedChunker(
+        FixedSizeChunker(max_words=10, overlap_words=0),
+        {"other": "ringkasan"},
+    )
+
+    with pytest.raises(KeyError, match="Missing document summary"):
+        chunker.chunk("doc", "teks sumber")
 
 
 def test_invalid_overlap_is_rejected() -> None:
