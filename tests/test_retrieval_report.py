@@ -23,10 +23,10 @@ def _record(query_id: str, strategy: str, ranking: list[str], latency: float) ->
 
 def test_paired_report_compares_structure_aware_with_fixed_size() -> None:
     qrels = [
-        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
-        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
-        {"query_id": "q2", "document_id": "d2", "strategy": "fixed_size", "chunk_id": "f2", "relevance_grade": "2"},
-        {"query_id": "q2", "document_id": "d2", "strategy": "structure_aware", "chunk_id": "s2", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+        {"query_id": "q2", "document_id": "d2", "evidence_id": "q2:e1", "strategy": "fixed_size", "chunk_id": "f2", "relevance_grade": "2"},
+        {"query_id": "q2", "document_id": "d2", "evidence_id": "q2:e1", "strategy": "structure_aware", "chunk_id": "s2", "relevance_grade": "2"},
     ]
     runs = {
         "fixed_size": [
@@ -68,8 +68,8 @@ def test_latency_summary_uses_interpolated_p95() -> None:
 
 def test_report_marks_gold_document_oracle_scope() -> None:
     qrels = [
-        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
-        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
     ]
     fixed = _record("q1", "fixed_size", ["f1"], 1.0)
     structure = _record("q1", "structure_aware", ["s1"], 1.0)
@@ -91,8 +91,8 @@ def test_report_marks_gold_document_oracle_scope() -> None:
 
 def test_report_marks_final_holdout_without_pilot_warning() -> None:
     qrels = [
-        {"query_id": "q1", "document_id": "d1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
-        {"query_id": "q1", "document_id": "d1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
     ]
     result = evaluate_paired_runs(
         qrels,
@@ -111,6 +111,29 @@ def test_report_marks_final_holdout_without_pilot_warning() -> None:
     assert "Hasil pilot" not in markdown
 
 
+def test_report_marks_previously_opened_holdout_as_exploratory() -> None:
+    qrels = [
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "q1:e1", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+    ]
+    result = evaluate_paired_runs(
+        qrels,
+        {
+            "fixed_size": [_record("q1", "fixed_size", ["f1"], 1.0)],
+            "structure_aware": [_record("q1", "structure_aware", ["s1"], 1.0)],
+        },
+        ks=(1,),
+        bootstrap_samples=10,
+    )
+    result["evaluation_stage"] = "corrected_exploratory_holdout"
+
+    markdown = render_markdown(result)
+
+    assert "pernah dibuka" in markdown
+    assert "bukan konfirmasi blind" in markdown
+    assert "tidak digunakan untuk pemilihan desain" not in markdown
+
+
 def test_cluster_bootstrap_keeps_document_questions_together() -> None:
     low, high = paired_cluster_bootstrap_interval(
         {"d1": [1.0, 1.0], "d2": [-1.0, -1.0]},
@@ -120,3 +143,23 @@ def test_cluster_bootstrap_keeps_document_questions_together() -> None:
 
     assert low == pytest.approx(-1.0)
     assert high == pytest.approx(1.0)
+
+
+def test_report_rejects_strategy_specific_evidence_denominators() -> None:
+    qrels = [
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "shared", "strategy": "fixed_size", "chunk_id": "f1", "relevance_grade": "2"},
+        {"query_id": "q1", "document_id": "d1", "evidence_id": "different", "strategy": "structure_aware", "chunk_id": "s1", "relevance_grade": "2"},
+    ]
+
+    with pytest.raises(ValueError, match="same evidence units"):
+        evaluate_paired_runs(
+            qrels,
+            {
+                "fixed_size": [_record("q1", "fixed_size", ["f1"], 1.0)],
+                "structure_aware": [
+                    _record("q1", "structure_aware", ["s1"], 1.0)
+                ],
+            },
+            ks=(1,),
+            bootstrap_samples=10,
+        )

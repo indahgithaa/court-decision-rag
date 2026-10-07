@@ -106,7 +106,12 @@ class DenseVectorStore:
             for index in indices
         ]
 
-    def save(self, directory: Path) -> None:
+    def save(
+        self,
+        directory: Path,
+        *,
+        provenance: Mapping[str, Any] | None = None,
+    ) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         np.save(directory / "embeddings.npy", self.embeddings, allow_pickle=False)
         write_jsonl(directory / "chunks.jsonl", self.chunks)
@@ -119,6 +124,7 @@ class DenseVectorStore:
             "strategies": sorted(
                 {str(chunk.get("strategy", "")) for chunk in self.chunks}
             ),
+            "provenance": dict(provenance or {}),
         }
         (directory / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",

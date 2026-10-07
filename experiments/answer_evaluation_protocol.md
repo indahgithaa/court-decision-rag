@@ -5,7 +5,18 @@
 Membandingkan dampak *fixed-size chunking* dan *structure-aware chunking* (SAC)
 terhadap kualitas jawaban, dengan komponen selain strategi chunking dibuat sama.
 
-## Desain yang dibekukan
+## Status desain retrieval
+
+Desain retrieval lama `fixed_w500_o100` dan `sac_w150_o30_s0` berstatus
+`requires_rerun` setelah Recall dipindahkan dari denominator chunk per strategi
+ke unit evidence bersama. Eksperimen generasi tidak boleh dimulai dari holdout
+sampai development selection dengan schema `retrieval-v2-evidence-recall`
+selesai dan selection baru berstatus `frozen`.
+Selection aktif harus berasal dari
+`experiments/indolaw_200_selected_design_v2.json`; file tanpa suffix adalah
+artefak legacy dan tidak boleh dipakai oleh generation/holdout.
+
+## Konfigurasi kandidat sebelum pembekuan ulang
 
 - Fixed-size: `fixed_w500_o100`
 - SAC: `sac_w150_o30_s0`

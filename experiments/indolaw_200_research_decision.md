@@ -1,5 +1,11 @@
 # Keputusan riset chunking Indo-Law 200
 
+> **Status 7 Oktober 2026: INVALID / NEEDS RERUN.** Angka di bawah berasal dari
+> Recall dengan denominator chunk relevan yang dapat berbeda antardesain. Setelah
+> evaluator dipindahkan ke unit evidence bersama, development selection dan
+> holdout harus dijalankan ulang. Pertahankan bagian ini hanya sebagai catatan
+> corrected exploratory analysis lama, bukan hasil final.
+
 ## Kesimpulan
 
 Pada corrected analysis corpus-wide, structure-aware chunking (SAC) memberikan

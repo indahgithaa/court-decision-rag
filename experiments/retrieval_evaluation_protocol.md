@@ -1,5 +1,11 @@
 # Protokol evaluasi retrieval
 
+Schema metrik aktif: `retrieval-v2-evidence-recall`.
+
+Recall@K dihitung atas unit evidence yang sama untuk kedua strategi. Hasil lama
+yang memakai denominator ID chunk per strategi berstatus legacy dan harus
+dijalankan ulang sebelum dipakai sebagai hasil final.
+
 ## Landasan metodologis
 
 Desain ini mengadaptasi, tetapi tidak menyamakan, beberapa hasil penelitian:
@@ -110,6 +116,10 @@ dipilih.
 ## Relevansi chunk
 
 Ground truth disimpan sebagai rentang bukti dokumen, bukan sebagai ID chunk.
+Setiap unit jawaban memiliki `evidence_id` stabil. Semua chunk Fixed maupun SAC
+yang mendukung unit yang sama dipetakan ke `evidence_id` tersebut. Beberapa
+kemunculan pasal ekuivalen untuk satu pertanyaan bukan evidence atom terpisah;
+semuanya menjadi alternatif dukungan bagi `evidence_id` primer yang sama.
 Setelah kedua strategi selesai menghasilkan chunk, kandidat relevansi diturunkan
 secara terpisah untuk setiap strategi:
 
@@ -120,6 +130,14 @@ secara terpisah untuk setiap strategi:
 Kasus grade 1 harus diperiksa manual karena overlap karakter saja belum menjamin
 bahwa konteks jawaban tersedia. Cara ini mencegah skema anotasi menguntungkan
 salah satu strategi dan memungkinkan nDCG memakai tingkat relevansi.
+
+Recall@K adalah proporsi `evidence_id` unik yang dicakup oleh sedikitnya satu
+chunk pada K hasil teratas. Beberapa overlapping chunk untuk evidence yang sama
+hanya dihitung satu kali. Dengan demikian, ukuran dan overlap chunk tidak
+mengubah denominator Recall. MRR@K tetap memakai rank chunk relevan pertama.
+NDCG@K memakai grade relevansi chunk 0/1/2 dengan gain `2^grade - 1` dan diskon
+`log2(rank + 1)`; keterbatasan duplikasi evidence pada overlapping chunk harus
+dilaporkan dan dianalisis dalam sensitivity check.
 
 Setelah pertanyaan berstatus `approved`, buat kandidat qrels untuk kedua strategi:
 
@@ -154,8 +172,12 @@ Split dilakukan berdasarkan pengadilan: 40 dokumen development untuk memilih
 desain dan 160 dokumen holdout untuk satu evaluasi final. Grid development
 menguji ukuran 150, 300, dan 500 kata dengan overlap 20% pada kedua keluarga.
 Aturan seleksi adalah NDCG@5, lalu MRR@5, Recall@5, dan jumlah chunk yang lebih
-kecil. Setelah evaluator diselaraskan dengan metrik skripsi, desain yang
-terpilih adalah `fixed_w500_o100` dan `sac_w150_o30_s0`.
+kecil. Desain lama `fixed_w500_o100` dan `sac_w150_o30_s0` dipilih dengan
+denominator Recall per chunk dan kini berstatus `requires_rerun`; desain aktif
+baru boleh dibekukan setelah development dijalankan dengan schema evidence.
+Selection hasil rerun disimpan sebagai
+`experiments/indolaw_200_selected_design_v2.json` agar selection legacy tidak
+ditimpa.
 
 Setiap dokumen memiliki empat pertanyaan deterministik berbasis span. Untuk
 pertanyaan ketentuan pidana, setiap kemunculan pasal ekuivalen dalam section

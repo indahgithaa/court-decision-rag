@@ -10,6 +10,7 @@ from src.evaluation.ground_truth import (
     validate_questions,
 )
 from src.evaluation.retrieval_metrics import (
+    evidence_recall_at_k,
     evaluate_retrieval,
     ndcg_at_k,
     recall_at_k,
@@ -37,6 +38,7 @@ from src.evaluation.sac_compliance import (
 __all__ = [
     "analyze_retrieval_errors",
     "build_qrel_candidates",
+    "evidence_recall_at_k",
     "evaluate_retrieval",
     "evaluate_paired_runs",
     "paired_cluster_bootstrap_interval",

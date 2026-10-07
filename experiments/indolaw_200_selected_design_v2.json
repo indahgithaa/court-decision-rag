@@ -1,7 +1,7 @@
 {
-  "status": "requires_rerun",
-  "metric_schema_version": "legacy-chunk-recall",
-  "recall_unit": "strategy_specific_chunk",
+  "status": "frozen",
+  "metric_schema_version": "retrieval-v2-evidence-recall",
+  "recall_unit": "evidence",
   "dataset": "indolaw_200",
   "selected_on": "development_only",
   "development_documents": 40,

@@ -1,5 +1,10 @@
 # Desain holdout final dan robustness eksternal
 
+> **Status 7 Oktober 2026:** desain Indo-Law yang tercatat memerlukan rerun
+> dengan schema `retrieval-v2-evidence-recall`. Holdout 160 dokumen lama sudah
+> pernah dibuka dan hanya boleh diperlakukan sebagai exploratory; klaim
+> konfirmatori memerlukan holdout baru setelah evaluator dan konfigurasi dibekukan.
+
 ## Keputusan corpus 200 dokumen
 
 Evaluasi retrieval membandingkan Recall@K, MRR, dan NDCG@K antara

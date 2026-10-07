@@ -51,6 +51,24 @@ def test_dense_store_round_trip_and_ranking(tmp_path: Path) -> None:
     assert loaded.dimension == 2
 
 
+def test_dense_store_saves_provenance_without_changing_load_contract(
+    tmp_path: Path,
+) -> None:
+    store = DenseVectorStore(
+        [{"chunk_id": "c1", "document_id": "d1", "text": "x"}],
+        np.asarray([[1.0, 0.0]], dtype=np.float32),
+        model_name="fake-asymmetric",
+    )
+
+    store.save(tmp_path, provenance={"design": "fixed_w500_o100"})
+    loaded = DenseVectorStore.load(tmp_path)
+
+    assert loaded.model_name == "fake-asymmetric"
+    assert "fixed_w500_o100" in (tmp_path / "manifest.json").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_retriever_rejects_model_mismatch() -> None:
     store = DenseVectorStore(
         [{"chunk_id": "c1", "document_id": "d1", "text": "x"}],

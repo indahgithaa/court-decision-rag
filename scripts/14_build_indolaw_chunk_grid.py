@@ -18,6 +18,7 @@ FIELDNAMES = [
     "query_id",
     "document_id",
     "target_section_label",
+    "evidence_id",
     "strategy",
     "chunk_id",
     "chunk_start_position",
@@ -167,6 +168,11 @@ def _alternate_statute_qrels(
                         "query_id": question["query_id"],
                         "document_id": document_id,
                         "target_section_label": question["target_section_label"],
+                        "evidence_id": (
+                            f"{question['query_id']}:"
+                            f"{question['evidence_start_position']}:"
+                            f"{question['evidence_end_position']}"
+                        ),
                         "strategy": str(chunk["strategy"]),
                         "chunk_id": str(chunk["chunk_id"]),
                         "chunk_start_position": chunk_start,

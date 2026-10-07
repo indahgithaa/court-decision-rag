@@ -90,6 +90,9 @@ def build_qrel_candidates(
         document_id = str(question["document_id"])
         evidence_start = int(str(question["evidence_start_position"]))
         evidence_end = int(str(question["evidence_end_position"]))
+        evidence_id = str(question.get("evidence_id", "")).strip() or (
+            f"{query_id}:{evidence_start}:{evidence_end}"
+        )
         evidence_length = evidence_end - evidence_start
         found = False
         for chunk in chunks_by_document.get(document_id, []):
@@ -105,6 +108,7 @@ def build_qrel_candidates(
                     "query_id": query_id,
                     "document_id": document_id,
                     "target_section_label": str(question.get("target_section_label", "")),
+                    "evidence_id": evidence_id,
                     "strategy": str(chunk.get("strategy", "")),
                     "chunk_id": str(chunk["chunk_id"]),
                     "chunk_start_position": chunk_start,

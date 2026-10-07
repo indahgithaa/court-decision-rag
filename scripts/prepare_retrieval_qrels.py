@@ -15,6 +15,7 @@ FIELDNAMES = [
     "query_id",
     "document_id",
     "target_section_label",
+    "evidence_id",
     "strategy",
     "chunk_id",
     "chunk_start_position",

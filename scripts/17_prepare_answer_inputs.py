@@ -22,7 +22,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--selection",
         type=Path,
-        default=Path("experiments/indolaw_200_selected_design.json"),
+        default=Path("experiments/indolaw_200_selected_design_v2.json"),
     )
     parser.add_argument(
         "--evaluation-root", type=Path, default=Path("data/evaluation/indolaw_200")
@@ -36,6 +36,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     selection = json.loads(args.selection.read_text(encoding="utf-8"))
+    _require_frozen_selection(selection)
     designs = {
         "fixed_size": str(selection["fixed_size"]),
         "structure_aware": str(selection["structure_aware"]),
@@ -133,6 +134,18 @@ def _index_runs(records: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             raise ValueError(f"Duplicate run query_id: {query_id}")
         indexed[query_id] = record
     return indexed
+
+
+def _require_frozen_selection(selection: dict[str, Any]) -> None:
+    expected_schema = "retrieval-v2-evidence-recall"
+    if selection.get("status") != "frozen":
+        raise ValueError("Selected design is not frozen; rerun development selection")
+    if selection.get("metric_schema_version") != expected_schema:
+        raise ValueError(
+            f"Selected design must use {expected_schema}; rerun development selection"
+        )
+    if selection.get("recall_unit") != "evidence":
+        raise ValueError("Selected design must use evidence-level Recall@K")
 
 
 if __name__ == "__main__":

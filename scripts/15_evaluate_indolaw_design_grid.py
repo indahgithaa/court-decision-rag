@@ -54,16 +54,32 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--selection-output",
         type=Path,
-        default=Path("experiments/indolaw_200_selected_design.json"),
+        default=Path("experiments/indolaw_200_selected_design_v2.json"),
     )
     args = parser.parse_args(argv)
+
+    for output in (args.output_json, args.output_md, args.selection_output):
+        if output.exists():
+            raise FileExistsError(f"Refusing to overwrite existing artifact: {output}")
 
     with args.questions.open("r", encoding="utf-8-sig", newline="") as file:
         questions = list(csv.DictReader(file))
     labels = {row["query_id"]: row["target_section_label"] for row in questions}
     evaluations: dict[str, Any] = {}
+    shared_evidence_units: dict[str, set[str]] | None = None
     for name in CONFIGS:
-        qrels = _read_qrels(args.qrels_root / f"development_{name}_qrels.csv")
+        qrels, evidence_qrels = _read_qrels(
+            args.qrels_root / f"development_{name}_qrels.csv"
+        )
+        current_evidence_units = {
+            query_id: set(units) for query_id, units in evidence_qrels.items()
+        }
+        if shared_evidence_units is None:
+            shared_evidence_units = current_evidence_units
+        elif current_evidence_units != shared_evidence_units:
+            raise ValueError(
+                f"Evidence units differ for {name}; all designs must use the same units"
+            )
         records = list(
             read_jsonl(args.runs_root / f"indolaw_200_development_{name}_top50.jsonl")
         )
@@ -74,13 +90,21 @@ def main(argv: Sequence[str] | None = None) -> None:
             ]
             for record in records
         }
-        overall = evaluate_retrieval(qrels, rankings, ks=(1, 3, 5, 10, 50))
+        overall = evaluate_retrieval(
+            qrels,
+            rankings,
+            evidence_qrels=evidence_qrels,
+            ks=(1, 3, 5, 10, 50),
+        )
         by_section: dict[str, Any] = {}
         for label in sorted(set(labels.values())):
             query_ids = {query_id for query_id, value in labels.items() if value == label}
             by_section[label] = evaluate_retrieval(
                 {query_id: qrels[query_id] for query_id in query_ids},
                 {query_id: rankings[query_id] for query_id in query_ids},
+                evidence_qrels={
+                    query_id: evidence_qrels[query_id] for query_id in query_ids
+                },
                 ks=(1, 3, 5, 10, 50),
             )
         chunk_count = sum(1 for _ in read_jsonl(args.chunks_root / name / "chunks.jsonl"))
@@ -114,6 +138,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     args.output_json.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     args.output_md.write_text(markdown, encoding="utf-8")
     frozen = {
+        "status": "frozen",
+        "metric_schema_version": "retrieval-v2-evidence-recall",
+        "recall_unit": "evidence",
         "dataset": result["dataset"],
         "selected_on": "development_only",
         "development_documents": 40,
@@ -129,14 +156,34 @@ def main(argv: Sequence[str] | None = None) -> None:
     print(markdown)
 
 
-def _read_qrels(path: Path) -> dict[str, dict[str, float]]:
+def _read_qrels(
+    path: Path,
+) -> tuple[dict[str, dict[str, float]], dict[str, dict[str, tuple[str, ...]]]]:
     qrels: dict[str, dict[str, float]] = {}
+    evidence: dict[str, dict[str, set[str]]] = {}
     with path.open("r", encoding="utf-8-sig", newline="") as file:
         for row in csv.DictReader(file):
             grade = float(row["relevance_grade"])
             if grade > 0:
-                qrels.setdefault(row["query_id"], {})[row["chunk_id"]] = grade
-    return qrels
+                query_id = row["query_id"]
+                chunk_id = row["chunk_id"]
+                evidence_id = row.get("evidence_id", "").strip()
+                if not evidence_id:
+                    raise ValueError(
+                        f"Missing evidence_id for {query_id}; regenerate {path}"
+                    )
+                qrels.setdefault(query_id, {})[chunk_id] = grade
+                evidence.setdefault(query_id, {}).setdefault(evidence_id, set()).add(
+                    chunk_id
+                )
+    frozen_evidence = {
+        query_id: {
+            evidence_id: tuple(sorted(chunk_ids))
+            for evidence_id, chunk_ids in evidence_by_id.items()
+        }
+        for query_id, evidence_by_id in evidence.items()
+    }
+    return qrels, frozen_evidence
 
 
 def _select(evaluations: dict[str, Any], family: str) -> str:

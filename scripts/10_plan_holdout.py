@@ -104,15 +104,28 @@ def summarize_pilot(
     *,
     k: int,
 ) -> dict[str, Any]:
-    relevant: dict[str, dict[str, set[str]]] = {
-        strategy: defaultdict(set) for strategy in STRATEGIES
+    relevant: dict[str, dict[str, dict[str, set[str]]]] = {
+        strategy: defaultdict(lambda: defaultdict(set)) for strategy in STRATEGIES
     }
     documents: dict[str, str] = {}
     for row in qrel_rows:
         query_id = row["query_id"]
         documents[query_id] = row["document_id"]
         if float(row["relevance_grade"]) > 0:
-            relevant[row["strategy"]][query_id].add(row["chunk_id"])
+            evidence_id = row.get("evidence_id", "").strip()
+            if not evidence_id:
+                raise ValueError(
+                    f"Missing evidence_id for {query_id}; regenerate qrels"
+                )
+            relevant[row["strategy"]][query_id][evidence_id].add(row["chunk_id"])
+
+    for query_id in documents:
+        fixed_units = set(relevant["fixed_size"][query_id])
+        structure_units = set(relevant["structure_aware"][query_id])
+        if fixed_units != structure_units:
+            raise ValueError(
+                f"Strategies must use the same evidence units for {query_id}"
+            )
 
     recalls: dict[str, dict[str, float]] = {}
     for strategy in STRATEGIES:
@@ -121,12 +134,13 @@ def summarize_pilot(
             ranking = sorted(record["ranking"], key=lambda item: int(item["rank"]))
             retrieved = {item["chunk_id"] for item in ranking[:k]}
             query_id = str(record["query_id"])
-            relevant_chunks = relevant[strategy][query_id]
-            if not relevant_chunks:
-                raise ValueError(f"query has no relevant chunks: {query_id}")
-            strategy_recalls[query_id] = len(retrieved & relevant_chunks) / len(
-                relevant_chunks
+            evidence_units = relevant[strategy][query_id]
+            if not evidence_units:
+                raise ValueError(f"query has no relevant evidence: {query_id}")
+            covered = sum(
+                bool(retrieved & chunk_ids) for chunk_ids in evidence_units.values()
             )
+            strategy_recalls[query_id] = covered / len(evidence_units)
         recalls[strategy] = strategy_recalls
 
     query_ids = sorted(documents)
@@ -145,6 +159,7 @@ def summarize_pilot(
     return {
         "query_count": len(query_ids),
         "document_count": len(differences_by_document),
+        "recall_unit": "evidence",
         "fixed_mean_recall": statistics.fmean(recalls["fixed_size"].values()),
         "structure_mean_recall": statistics.fmean(
             recalls["structure_aware"].values()

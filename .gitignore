@@ -24,9 +24,6 @@ env/
 .idea/
 .ipynb_checkpoints/
 
-# Local research notes
-README.md
-
 # Logs and local OS files
 *.log
 logs/

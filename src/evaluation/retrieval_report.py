@@ -32,6 +32,10 @@ def evaluate_paired_runs(
     if bootstrap_samples <= 0:
         raise ValueError("bootstrap_samples must be positive")
     qrels = {strategy: _build_qrels(qrel_rows, strategy) for strategy in STRATEGIES}
+    evidence_qrels = {
+        strategy: _build_evidence_qrels(qrel_rows, strategy)
+        for strategy in STRATEGIES
+    }
     parsed_runs = {
         strategy: _parse_run_records(run_records.get(strategy, ()), strategy)
         for strategy in STRATEGIES
@@ -39,6 +43,15 @@ def evaluate_paired_runs(
     expected_queries = set(qrels["fixed_size"])
     if set(qrels["structure_aware"]) != expected_queries:
         raise ValueError("Strategies must contain qrels for the same query IDs")
+    for query_id in expected_queries:
+        fixed_evidence = set(evidence_qrels["fixed_size"][query_id])
+        structure_evidence = set(evidence_qrels["structure_aware"][query_id])
+        if fixed_evidence != structure_evidence:
+            raise ValueError(
+                "Strategies must use the same evidence units for "
+                f"{query_id}: fixed={sorted(fixed_evidence)}, "
+                f"structure_aware={sorted(structure_evidence)}"
+            )
     query_documents = _query_documents(qrel_rows, expected_queries)
 
     labels = parsed_runs["fixed_size"]["labels"]
@@ -54,13 +67,22 @@ def evaluate_paired_runs(
     strategies: dict[str, Any] = {}
     for strategy in STRATEGIES:
         rankings = parsed_runs[strategy]["rankings"]
-        overall = evaluate_retrieval(qrels[strategy], rankings, ks=ks)
+        overall = evaluate_retrieval(
+            qrels[strategy],
+            rankings,
+            evidence_qrels=evidence_qrels[strategy],
+            ks=ks,
+        )
         by_section: dict[str, Any] = {}
         for label in sorted(set(labels.values())):
             query_ids = {query_id for query_id, value in labels.items() if value == label}
             by_section[label] = evaluate_retrieval(
                 {query_id: qrels[strategy][query_id] for query_id in query_ids},
                 {query_id: rankings[query_id] for query_id in query_ids},
+                evidence_qrels={
+                    query_id: evidence_qrels[strategy][query_id]
+                    for query_id in query_ids
+                },
                 ks=ks,
             )
         strategies[strategy] = {
@@ -93,6 +115,7 @@ def evaluate_paired_runs(
         }
 
     return {
+        "metric_schema_version": "retrieval-v2-evidence-recall",
         "query_count": len(expected_queries),
         "document_count": len(set(query_documents.values())),
         "cutoffs": sorted(set(ks)),
@@ -101,6 +124,7 @@ def evaluate_paired_runs(
         "bootstrap_unit": "document",
         "seed": seed,
         "retrieval_scope": retrieval_scope,
+        "recall_unit": "evidence",
         "strategies": strategies,
         "paired_difference": paired,
     }
@@ -169,6 +193,7 @@ def render_markdown(result: Mapping[str, Any]) -> str:
         f"# Evaluasi retrieval {dataset_label}{title_suffix}",
         "",
         f"Pertanyaan: {result['query_count']}",
+        "Recall unit: evidence span/occurrence shared across strategies.",
         "",
         "## Metrik keseluruhan",
         "",
@@ -262,6 +287,12 @@ def render_markdown(result: Mapping[str, Any]) -> str:
                 ]
                 if evaluation_stage == "final_holdout"
                 else [
+                    "Split holdout ini pernah dibuka sebelum skema metrik v2 dibekukan. "
+                    "Hasil koreksi ini bersifat eksploratif, bukan konfirmasi blind; klaim "
+                    "utama memerlukan holdout baru atau validasi eksternal."
+                ]
+                if evaluation_stage == "corrected_exploratory_holdout"
+                else [
                     "Hasil pilot digunakan untuk diagnosis pipeline, bukan klaim final; "
                     "klaim utama memerlukan holdout dokumen terpisah."
                 ]
@@ -292,6 +323,34 @@ def _build_qrels(
         if not any(value > 0 for value in relevance.values()):
             raise ValueError(f"No positive qrel for {strategy}/{query_id}")
     return dict(qrels)
+
+
+def _build_evidence_qrels(
+    rows: Sequence[Mapping[str, Any]], strategy: str
+) -> dict[str, dict[str, tuple[str, ...]]]:
+    evidence: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    for row in rows:
+        if str(row.get("strategy", "")) != strategy:
+            continue
+        grade_text = str(row.get("relevance_grade", "")).strip()
+        if not grade_text or float(grade_text) <= 0:
+            continue
+        query_id = str(row["query_id"])
+        evidence_id = str(row.get("evidence_id", "")).strip()
+        if not evidence_id:
+            raise ValueError(
+                f"Missing evidence_id for {strategy}/{query_id}; regenerate qrels"
+            )
+        evidence[query_id][evidence_id].add(str(row["chunk_id"]))
+    if not evidence:
+        raise ValueError(f"No positive evidence qrels found for strategy {strategy}")
+    return {
+        query_id: {
+            evidence_id: tuple(sorted(chunk_ids))
+            for evidence_id, chunk_ids in evidence_by_id.items()
+        }
+        for query_id, evidence_by_id in evidence.items()
+    }
 
 
 def _query_documents(
