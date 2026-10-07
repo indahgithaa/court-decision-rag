@@ -45,7 +45,7 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
 | Rumusan masalah dan tujuan | DONE | Draft menetapkan penerapan dan perbandingan SAC dengan chunking konvensional pada performa retrieval dan kualitas jawaban. |
 | Corpus Indo-Law 200 dan manifest | DONE (reproduksi lokal) | Seluruh 200 XML direstorasi dari commit sumber terpin; byte dan SHA-256 semuanya cocok. Manifest berisi 71 pengadilan dan split 40/160 tanpa overlap pengadilan. |
 | Corpus PDF utama | NOT STARTED | Direktori data hanya berisi `.gitkeep`; tidak ada corpus PDF, manifest final, atau split PDF holdout. |
-| QA dataset Indo-Law | PARTIAL | CSV berisi 160 pertanyaan development dan 640 holdout telah diregenerasi deterministik. Label `approved` masih otomatis dan belum divalidasi manusia. |
+| QA dataset Indo-Law | PARTIAL (draft v2 tersedia) | Benchmark lama berisi 160 pertanyaan development dan 640 holdout dengan label `approved` otomatis. Generator v2 menghasilkan 188 draft development: tempat lahir dan penahanan dipisahkan, evidence section/anchor/method/quality flag dicatat, kandidat ambigu ditolak, dan semua baris menunggu review manusia. |
 | QA dataset PDF | NOT STARTED | Tidak ada pertanyaan, gold answer, evidence span, atau qrels final untuk corpus PDF. |
 | Split development/holdout Indo-Law | DONE | Manifest menunjukkan 40 development dan 160 holdout, dikelompokkan berdasarkan pengadilan tanpa overlap. |
 | Split development/holdout PDF | NOT STARTED | Protokol ada, tetapi corpus dan artefaknya tidak tersedia. |
@@ -53,7 +53,7 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
 | Pembersihan teks | PARTIAL | Implementasi dan test pola boilerplate tersedia. Draft menyebut lowercasing serta penghapusan gambar/tabel/garis; implementasi tidak melakukan lowercasing dan hanya bekerja pada teks hasil ekstraksi. Perbedaan perlu diselaraskan. |
 | Deteksi struktur otomatis | PARTIAL | Detector regex, fallback `unknown`, preservasi karakter, dan test sintetis tersedia. Belum ada hasil audit manusia pada holdout PDF yang tidak dipakai mengembangkan regex. |
 | Fixed-size chunking | DONE (kode) / PARTIAL (validasi) | Implementasi word-window dan overlap tersedia serta diuji secara unit; konfigurasi utama YAML masih 300/50, berbeda dari desain Indo-Law terpilih 500/100. |
-| SAC | DONE (kode) / PARTIAL (validasi) | Implementasi menjaga batas section dan memiliki fallback. Validasi struktur pada data nyata/final belum tersedia. |
+| SAC | DONE (kode) / PARTIAL (validasi) | Implementasi menjaga batas section dan memiliki fallback. Kandidat Pure SAC v2 menambahkan boundary retoris source-only tanpa contextual embedding; peningkatannya pada reasoning development kecil dan belum tervalidasi eksternal. |
 | Embedding dan index | DONE (Indo-Law) / PARTIAL (environment) | Enam index development dan dua index holdout dibangun ulang dengan `intfloat/multilingual-e5-small`; manifest menyimpan model, package, input/output hash, commit, dan platform. Lockfile final belum ada. |
 | Retrieval Fixed vs SAC | DONE (eksploratif Indo-Law) / NOT FINAL | Raw qrels, chunks, index, rankings, report, dan manifest berhasil direproduksi. Holdout sudah pernah dibuka, memakai gold XML section, dan tidak boleh disebut konfirmatori atau evaluasi PDF. |
 | Recall@K | DONE (evaluator dan rerun v2) | Schema aktif menghitung coverage `evidence_id` bersama dan mendeduplikasi overlapping chunk; seluruh development/holdout telah direrun. |
@@ -72,7 +72,7 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
 | End-to-end latency | NOT STARTED | Belum dihitung. |
 | Statistical uncertainty | PARTIAL | Paired cluster bootstrap pada unit dokumen tersedia. Belum ada effect size, sensitivity analysis final, atau uji alternatif yang dibenarkan oleh asumsi. |
 | Qualitative error analysis | PARTIAL | Infrastruktur taxonomy tersedia, tetapi tidak ada artefak final yang dapat diperiksa atau tabel kasus thesis-ready. |
-| Ablation | PARTIAL | Grid ukuran/overlap Indo-Law ada dalam kode dan ringkasan; kondisi sentence-overlap tidak efektif pada XML tanpa tanda baca. Tidak ada ablation detector/fallback pada PDF. |
+| Ablation | PARTIAL | Grid fixed, Pure SAC lama, dan Pure SAC v2 tersedia pada pasangan 150/30, 300/60, dan 500/100. Boundary-aligned v2 hanya memberi peningkatan kecil pada reasoning 300/60; tidak ada ablation detector/fallback pada PDF. |
 | Reproducibility | PARTIAL | Indo-Law dapat direstorasi dan direrun; manifest mencatat hash data/chunks/runs/source, versi package, model, seed, platform, dan commit. Artefak besar masih diabaikan Git, run memakai working tree kotor, dan belum ada lockfile/registry persisten. |
 | Thesis-ready Bab IV/V | NOT STARTED | Draft berhenti pada awal Bab IV dan tidak memuat hasil final. |
 
@@ -130,11 +130,13 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
 
 ### High
 
-1. **Gold QA belum benar-benar gold.** Pertanyaan Indo-Law dibuat regex dan
-   otomatis berstatus `approved`. Dampak: error ekstraksi nama/span dan template
-   artefaktual dapat menggeser hasil. Perbaikan: review manusia buta terhadap
-   retrieval, catat annotator dan keputusan, serta audit sampel/inter-annotator
-   agreement bila ada lebih dari satu anotator.
+1. **Gold QA lama belum benar-benar gold.** Pertanyaan Indo-Law lama dibuat
+   regex dan otomatis berstatus `approved`. Audit menemukan nilai tempat lahir
+   yang dapat bocor menjadi label field serta pertanyaan administratif yang
+   hampir selalu memilih tempat lahir, bukan penahanan. Generator v2 sudah
+   membuat 188 draft development konservatif dan tidak melakukan auto-approve.
+   Perbaikan tersisa: review manusia buta terhadap retrieval, catat annotator
+   dan keputusan, serta audit inter-annotator agreement bila memungkinkan.
 
 2. **Generation dan answer evaluation belum ada.** Ini langsung membuat tujuan
    penelitian terkait kualitas jawaban belum terjawab. Perbaikan: selesaikan
@@ -169,9 +171,11 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
    atau end-to-end.
 4. Recall/CI dilaporkan, tetapi belum ada effect size terstandar atau analisis
    sensitivitas terhadap distribusi pertanyaan per section.
-5. Riwayat penahanan hanya memiliki lima query pada holdout tercatat, sehingga
-   per-section result tersebut sangat tidak stabil dan tidak boleh ditafsirkan
-   setara dengan strata berukuran sekitar 160.
+5. Benchmark lama memiliki hanya satu query riwayat penahanan pada development
+   dan lima pada holdout karena penahanan dijadikan fallback setelah tempat
+   lahir. Per-section result tersebut tidak stabil. Draft v2 memisahkan kedua
+   tipe dan memperoleh 40 pertanyaan penahanan development, tetapi belum boleh
+   dipakai sebagai gold sebelum review manusia.
 6. ~~`README.md` tidak ada dan diabaikan `.gitignore`.~~ **Selesai:** README kini
    terlacak dan memuat setup, urutan reproduksi v2, serta batas klaim.
 
@@ -237,6 +241,21 @@ offset sumber. Pada development, Recall@5 `pertimbangan_hukum` meningkat dari
 Kandidat ini berstatus post-hoc dan wajib divalidasi pada data baru; frozen v2
 dan hasil holdout lama tidak diubah.
 
+### Keputusan lanjutan: tetap Pure SAC
+
+Untuk menjaga ruang lingkup skripsi, contextual candidate tidak dipilih sebagai
+desain utama. Pure SAC v2 kemudian diuji dengan batas window yang disejajarkan
+ke marker retoris sumber setelah minimal 70% word budget terisi. Ukuran dan
+overlap disamakan dengan fixed pada 150/30, 300/60, dan 500/100; tidak ada
+context prefix, query filter, atau reranker.
+
+Pada development 300/60, Recall@5 `pertimbangan_hukum` naik kecil dari 0,5500
+menjadi 0,5750 dan Recall@10 dari 0,6750 menjadi 0,7000 dibanding Pure SAC lama.
+MRR@5 turun dari 0,1812 menjadi 0,1729, sedangkan fixed 300/60 mencapai
+Recall@5 0,8000. Pada seleksi nDCG@5 agregat, Pure SAC lama 150/30 tetap kandidat
+terbaik. Pure SAC v2 harus dilaporkan sebagai ablation eksploratif, bukan solusi
+final. Rancangan dan tabel lengkap ada di `experiments/pure_sac_v2_design.md`.
+
 ## Risiko validitas
 
 - **Construct validity:** chunk-level Recall mungkin tidak merepresentasikan
@@ -266,8 +285,9 @@ Urutan kerja yang langsung dapat dilanjutkan:
 3. Bekukan environment Python dengan lockfile dari `.venv` Python 3.12.10.
    Environment capture otomatis sudah ada, tetapi run v2 masih berasal dari
    working tree kotor dan dependency belum terkunci.
-4. Lakukan review manusia buta terhadap pertanyaan, gold answer, dan evidence
-   span Indo-Law; jangan memperlakukan flag `approved` otomatis sebagai gold.
+4. Review draft dataset v2 secara buta terhadap hasil retrieval, lalu ekspor
+   hanya baris yang benar-benar disetujui. Jangan memperlakukan flag `approved`
+   otomatis pada benchmark lama atau status `draft` v2 sebagai gold.
 5. Perlakukan 160 dokumen lama sebagai exploratory. Buat holdout baru setelah
    evaluator dan desain dibekukan jika klaim konfirmatori masih diperlukan.
 6. Bangun primary PDF dataset/split sesuai klaim skripsi; audit detector secara
@@ -301,6 +321,6 @@ Urutan kerja yang langsung dapat dilanjutkan:
   merujuk Gambar 4.3, tetapi gambar tersebut belum tercantum sebelum daftar
   referensi.
 - `python -m compileall -q src scripts tests` lulus.
-- Seluruh test lulus: **78 passed** dengan Python 3.12.10. Test yang memakai
+- Seluruh test lulus: **89 passed** dengan Python 3.12.10. Test yang memakai
   temporary directory harus dijalankan di luar sandbox filesystem; tidak ada
   kegagalan logika atau assertion.

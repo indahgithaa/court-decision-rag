@@ -1,0 +1,20 @@
+extends: default.yaml
+
+# Development-only Pure SAC candidate: exact source text, no contextual prefix,
+# no query-aware filter, and no cross-section chunk.
+experiment:
+  status: post_hoc_development_candidate
+
+chunking:
+  strategy: structure_aware
+  max_words: 300
+  overlap_words: 60
+  overlap_sentences: 0
+  backfill_short_tail: true
+  boundary_mode: legal_rhetorical
+  boundary_min_fill_ratio: 0.7
+  embedding_context: none
+  output_path: data/chunks/structure_aware_pure_v2/chunks.jsonl
+
+retrieval:
+  index_path: vector_db/structure_aware_pure_v2

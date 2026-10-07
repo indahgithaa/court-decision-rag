@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
+from math import ceil
 from typing import Mapping, Sequence
 
 from .base import BaseChunker, Chunk
 
 
 class StructureAwareChunker(BaseChunker):
-    """Split sections with SAC-H+ sentence-aware overlap."""
+    """Split source sections with sentence or legal-boundary-aware overlap."""
 
     strategy = "structure_aware"
 
@@ -21,6 +23,8 @@ class StructureAwareChunker(BaseChunker):
         overlap_sentences: int = 2,
         backfill_short_tail: bool = False,
         embedding_context: str = "none",
+        boundary_mode: str = "sentence",
+        boundary_min_fill_ratio: float = 0.7,
     ) -> None:
         super().__init__(max_words=max_words, overlap_words=overlap_words)
         if overlap_sentences < 0:
@@ -38,6 +42,16 @@ class StructureAwareChunker(BaseChunker):
                 "or section_reasoning_document"
             )
         self.embedding_context = embedding_context
+        if boundary_mode not in {"sentence", "legal_rhetorical"}:
+            raise ValueError(
+                "boundary_mode must be sentence or legal_rhetorical"
+            )
+        self.boundary_mode = boundary_mode
+        if not 0 < boundary_min_fill_ratio <= 1:
+            raise ValueError(
+                "boundary_min_fill_ratio must satisfy 0 < ratio <= 1"
+            )
+        self.boundary_min_fill_ratio = boundary_min_fill_ratio
 
     def chunk(
         self,
@@ -65,7 +79,9 @@ class StructureAwareChunker(BaseChunker):
             section_text = str(section.get("section_text", ""))
             section_start = int(section.get("start_position", 0))
             for chunk_text, start, end in self._sentence_windows(
-                section_text, offset=section_start
+                section_text,
+                offset=section_start,
+                section_label=str(section.get("section_label", "unknown")),
             ):
                 index = len(chunks)
                 chunks.append(
@@ -132,12 +148,28 @@ class StructureAwareChunker(BaseChunker):
         )
         return " ".join(match.group(1).split()) if match else None
 
-    def _sentence_windows(self, text: str, *, offset: int) -> list[tuple[str, int, int]]:
-        """Pack complete sentences and carry the previous two into the next chunk.
+    def _sentence_windows(
+        self,
+        text: str,
+        *,
+        offset: int,
+        section_label: str = "unknown",
+    ) -> list[tuple[str, int, int]]:
+        """Pack source-derived units without crossing the enclosing section.
 
-        A sentence longer than the word budget falls back to the shared word
-        window implementation, preserving the configured word overlap.
+        Pure SAC v1 uses punctuation-delimited sentences. Pure SAC v2 can use
+        legal rhetorical markers for long argumentative sections. A unit longer
+        than the word budget falls back to exact word windows.
         """
+        if self.boundary_mode == "legal_rhetorical" and section_label in {
+            "riwayat_dakwaan",
+            "fakta",
+            "fakta_hukum",
+            "pertimbangan_hukum",
+            "amar_putusan",
+        }:
+            return self._legal_rhetorical_windows(text, offset=offset)
+
         sentences = self._sentence_spans(text)
         if not sentences:
             return []
@@ -180,6 +212,58 @@ class StructureAwareChunker(BaseChunker):
             sentence_start = next_start
 
         windows = self._ensure_context_overlap(text, windows, offset=offset)
+        return self._backfill_tail(text, windows, offset=offset)
+
+    def _legal_rhetorical_windows(
+        self, text: str, *, offset: int
+    ) -> list[tuple[str, int, int]]:
+        """Create overlapping windows whose ends prefer legal discourse markers.
+
+        The hard word budget and overlap remain identical to fixed-size
+        chunking. A marker is used only after at least 70% of the budget has
+        been filled, preventing short rhetorical fragments and index bloat.
+        """
+        words = list(re.finditer(r"\S+", text))
+        if not words:
+            return []
+        word_starts = [word.start() for word in words]
+        boundaries = sorted(
+            {
+                bisect_left(word_starts, marker_start)
+                for marker_start in self._legal_rhetorical_starts(text)
+                if marker_start > 0
+            }
+        )
+        minimum_fill = max(
+            self.overlap_words + 1,
+            min(
+                self.max_words,
+                ceil(self.max_words * self.boundary_min_fill_ratio),
+            ),
+        )
+        windows: list[tuple[str, int, int]] = []
+        word_start = 0
+        while word_start < len(words):
+            hard_end = min(word_start + self.max_words, len(words))
+            if hard_end == len(words):
+                word_end = hard_end
+            else:
+                candidates = [
+                    boundary
+                    for boundary in boundaries
+                    if word_start + minimum_fill <= boundary <= hard_end
+                ]
+                word_end = candidates[-1] if candidates else hard_end
+
+            char_start = words[word_start].start()
+            char_end = words[word_end - 1].end()
+            windows.append(
+                (text[char_start:char_end], offset + char_start, offset + char_end)
+            )
+            if word_end == len(words):
+                break
+            word_start = word_end - self.overlap_words
+
         return self._backfill_tail(text, windows, offset=offset)
 
     def _backfill_tail(
@@ -292,4 +376,25 @@ class StructureAwareChunker(BaseChunker):
         if tail_match:
             spans.append((cursor + tail_match.start(), len(text.rstrip())))
         return spans
+
+    @staticmethod
+    def _legal_rhetorical_starts(text: str) -> list[int]:
+        marker = re.compile(
+            r"(?<!\S)(?:"
+            r"menimbang\s+bahwa|"
+            r"berdasarkan\s+(?:fakta|alat\s+bukti)|"
+            r"selanjutnya\s+majelis\s+hakim|"
+            r"terhadap\s+unsur|"
+            r"unsur(?:\s+ke\s*\d+|\s+kesatu|\s+kedua|\s+ketiga|\s+keempat|"
+            r"\s+setiap\s+orang|\s+tanpa\s+hak|\s+perbuatan|\s+unsurnya)|"
+            r"oleh\s+karena\s+(?:itu|semua\s+unsur)|"
+            r"(?:hal|keadaan)(?:\s+hal)?\s+yang\s+(?:memberatkan|meringankan)|"
+            r"memperhatikan(?:\s+pasal)?|"
+            r"mengadili(?:\s|$)|"
+            r"menyatakan\s+terdakwa|"
+            r"menjatuhkan\s+pidana"
+            r")",
+            flags=re.IGNORECASE,
+        )
+        return [match.start() for match in marker.finditer(text)]
 

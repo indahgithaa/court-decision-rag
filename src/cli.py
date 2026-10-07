@@ -130,6 +130,10 @@ def chunk_main(argv: Sequence[str] | None = None) -> None:
                 chunking.get("backfill_short_tail", False)
             ),
             embedding_context=str(chunking.get("embedding_context", "none")),
+            boundary_mode=str(chunking.get("boundary_mode", "sentence")),
+            boundary_min_fill_ratio=float(
+                chunking.get("boundary_min_fill_ratio", 0.7)
+            ),
         )
     else:
         raise ValueError(f"Unknown chunking strategy: {strategy}")

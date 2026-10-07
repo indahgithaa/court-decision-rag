@@ -7,6 +7,26 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 
+INDOLAW_V2_FIELDNAMES = [
+    "query_id",
+    "document_id",
+    "question_type",
+    "target_section_label",
+    "evidence_section_label",
+    "answer_scope",
+    "query_anchor_scope",
+    "extraction_method",
+    "quality_flags",
+    "question",
+    "reference_answer",
+    "evidence_start_position",
+    "evidence_end_position",
+    "difficulty",
+    "review_status",
+    "notes",
+]
+
+
 def build_indolaw_questions(
     sections: Sequence[Mapping[str, Any]], *, query_prefix: str
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -45,6 +65,125 @@ def build_indolaw_questions(
                     "difficulty": draft[5],
                     "review_status": "approved",
                     "notes": "Deterministic normalized-XML benchmark rule; exact span verified.",
+                }
+            )
+    return rows, failures
+
+
+def build_indolaw_questions_v2(
+    sections: Sequence[Mapping[str, Any]], *, query_prefix: str
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Build independent draft question families without all-or-none fallback.
+
+    Unlike the legacy four-question benchmark, birthplace and detention are
+    separate question families. Automatic span verification does not constitute
+    semantic approval, so every generated row remains ``draft`` for human review.
+    """
+    by_document: dict[str, dict[str, Mapping[str, Any]]] = {}
+    for section in sections:
+        by_document.setdefault(str(section["document_id"]), {})[
+            str(section["section_label"])
+        ] = section
+
+    rows: list[dict[str, str]] = []
+    failures: list[dict[str, str]] = []
+    for document_index, (document_id, document_sections) in enumerate(
+        sorted(by_document.items()), start=1
+    ):
+        try:
+            name = _defendant_name(document_sections)
+        except ValueError as error:
+            failures.append(
+                {
+                    "document_id": document_id,
+                    "question_type": "all",
+                    "error": str(error),
+                }
+            )
+            continue
+
+        builders = (
+            (
+                "birthplace",
+                lambda: _birthplace_v2(
+                    document_sections["identitas_terdakwa"], name
+                ),
+            ),
+            (
+                "detention",
+                lambda: _detention_v2(document_sections, name),
+            ),
+            (
+                "charge",
+                lambda: (
+                    _charge(document_sections["riwayat_dakwaan"], name),
+                    "riwayat_dakwaan",
+                    "charge_pattern",
+                ),
+            ),
+            (
+                "statute",
+                lambda: (
+                    _statute(document_sections["pertimbangan_hukum"], name),
+                    "pertimbangan_hukum",
+                    "statute_pattern",
+                ),
+            ),
+            (
+                "disposition",
+                lambda: (
+                    _disposition(document_sections["amar_putusan"], name),
+                    "amar_putusan",
+                    "disposition_pattern",
+                ),
+            ),
+        )
+        for question_type, builder in builders:
+            try:
+                draft, evidence_label, extraction_method = builder()
+            except (KeyError, ValueError) as error:
+                failures.append(
+                    {
+                        "document_id": document_id,
+                        "question_type": question_type,
+                        "error": str(error),
+                    }
+                )
+                continue
+            target_section = document_sections[evidence_label]
+            name_in_target = _clean(name).casefold() in _clean(
+                str(target_section["section_text"])
+            ).casefold()
+            quality_flags = []
+            if not name_in_target:
+                quality_flags.append("query_name_not_in_evidence_section")
+            if evidence_label != draft[0]:
+                quality_flags.append("semantic_target_differs_from_corpus_section")
+            rows.append(
+                {
+                    "query_id": (
+                        f"{query_prefix}-{document_index:03d}-{question_type}"
+                    ),
+                    "document_id": document_id,
+                    "question_type": question_type,
+                    "target_section_label": draft[0],
+                    "evidence_section_label": evidence_label,
+                    "answer_scope": "single_section",
+                    "query_anchor_scope": (
+                        "target_section" if name_in_target else "external_identity"
+                    ),
+                    "extraction_method": extraction_method,
+                    "quality_flags": ";".join(quality_flags),
+                    "question": draft[1],
+                    "reference_answer": draft[2],
+                    "evidence_start_position": str(draft[3]),
+                    "evidence_end_position": str(draft[4]),
+                    "difficulty": draft[5],
+                    "review_status": "draft",
+                    "notes": (
+                        "Deterministic normalized-XML draft; exact span verified; "
+                        "human semantic, extraction, and name review required."
+                    ),
                 }
             )
     return rows, failures
@@ -110,7 +249,95 @@ def _birthplace(section: Mapping[str, Any], name: str) -> tuple[str, str, str, i
     )
 
 
-def _detention(section: Mapping[str, Any], name: str) -> tuple[str, str, str, int, int, str]:
+def _birthplace_v2(
+    section: Mapping[str, Any], name: str
+) -> tuple[tuple[str, str, str, int, int, str], str, str]:
+    """Extract a conservative birthplace draft and reject field-label leakage."""
+    text = str(section["section_text"])
+    direct = re.search(
+        r"\b(?:\d+\s+)?tempat lahir\s+(.+?)"
+        r"(?=\s+(?:\d+\s+)?(?:umur|tanggal|tangal|tgl)\b)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if direct is not None and _valid_birthplace(direct.group(1)):
+        return (
+            _draft(
+                section,
+                direct,
+                "identitas_terdakwa",
+                f"Di mana {name} dilahirkan?",
+                "easy",
+                answer_group=1,
+            ),
+            "identitas_terdakwa",
+            "birthplace_inline_label",
+        )
+
+    # Some Indo-Law XML records serialize all field labels before their values.
+    # In those records a reliable recovery is possible only when the extracted
+    # defendant name is followed immediately by a short place and an age.
+    adjacent = re.search(
+        rf"\b{re.escape(_clean(name))}\s+([a-z][a-z .'-]{{1,60}}?)"
+        r"(?=\s+\d{1,3}\s+tahun\b)",
+        _clean(text),
+        flags=re.IGNORECASE,
+    )
+    if adjacent is not None and _valid_birthplace(adjacent.group(1)):
+        # Normalization only collapses whitespace. Locate the same candidate in
+        # the original section so the gold offsets still address source text.
+        candidate = _clean(adjacent.group(1))
+        source_match = re.search(
+            rf"\b{re.escape(candidate)}(?=\s+\d{{1,3}}\s+tahun\b)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if source_match is not None:
+            return (
+                _draft(
+                    section,
+                    source_match,
+                    "identitas_terdakwa",
+                    f"Di mana {name} dilahirkan?",
+                    "easy",
+                ),
+                "identitas_terdakwa",
+                "birthplace_name_adjacent",
+            )
+    raise ValueError("missing high-confidence evidence for identitas_terdakwa")
+
+
+def _valid_birthplace(value: str) -> bool:
+    candidate = _clean(value).casefold()
+    words = candidate.split()
+    forbidden = {
+        "atau",
+        "jenis",
+        "kebangsaan",
+        "kelamin",
+        "lahir",
+        "tanggal",
+        "tangal",
+        "tempat",
+        "tahun",
+        "tgl",
+        "tinggal",
+        "umur",
+    }
+    return (
+        1 <= len(words) <= 5
+        and not any(word in forbidden for word in words)
+        and re.fullmatch(r"[a-z][a-z .'-]*", candidate, flags=re.IGNORECASE)
+        is not None
+    )
+
+
+def _detention(
+    section: Mapping[str, Any],
+    name: str,
+    *,
+    max_answer_words: int = 28,
+) -> tuple[str, str, str, int, int, str]:
     text = str(section["section_text"])
     match = re.search(
         r"\b(?:\d+\s+)?penyidik(?!\s+perpanjangan)[\s\S]{0,120}?"
@@ -131,7 +358,34 @@ def _detention(section: Mapping[str, Any], name: str) -> tuple[str, str, str, in
         "riwayat_penahanan",
         f"Bagaimana riwayat awal penahanan {name}?",
         "easy",
+        max_answer_words=max_answer_words,
     )
+
+
+def _detention_v2(
+    sections: Mapping[str, Mapping[str, Any]], name: str
+) -> tuple[tuple[str, str, str, int, int, str], str, str]:
+    """Find initial detention even when the XML tag boundary splits it."""
+    detention = sections.get("riwayat_penahanan")
+    if detention is not None:
+        try:
+            return (
+                _detention(detention, name, max_answer_words=40),
+                "riwayat_penahanan",
+                "detention_section",
+            )
+        except ValueError:
+            pass
+    identity = sections.get("identitas_terdakwa")
+    if identity is not None:
+        return (
+            _detention(identity, name, max_answer_words=40),
+            "identitas_terdakwa",
+            "detention_embedded_in_identity",
+        )
+    raise ValueError("missing evidence for riwayat_penahanan")
+
+
 def _charge(section: Mapping[str, Any], name: str) -> tuple[str, str, str, int, int, str]:
     text = str(section["section_text"])
     match = re.search(
@@ -230,6 +484,7 @@ def _draft(
     question: str,
     difficulty: str,
     answer_group: int | None = None,
+    max_answer_words: int = 28,
 ) -> tuple[str, str, str, int, int, str]:
     if match is None:
         raise ValueError(f"missing evidence for {label}")
@@ -240,8 +495,8 @@ def _draft(
     while end > start and text[end - 1].isspace():
         end -= 1
     words = list(re.finditer(r"\S+", text[start:end]))
-    if len(words) > 28:
-        end = start + words[27].end()
+    if len(words) > max_answer_words:
+        end = start + words[max_answer_words - 1].end()
     answer = _clean(text[start:end])
     if not answer:
         raise ValueError(f"empty evidence for {label}")

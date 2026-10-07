@@ -82,6 +82,113 @@ def test_structure_aware_rejects_negative_sentence_overlap() -> None:
         StructureAwareChunker(overlap_sentences=-1)
 
 
+def test_structure_aware_rejects_unknown_boundary_mode() -> None:
+    with pytest.raises(ValueError, match="boundary_mode"):
+        StructureAwareChunker(boundary_mode="query_aware")
+
+
+def test_structure_aware_rejects_invalid_boundary_fill_ratio() -> None:
+    with pytest.raises(ValueError, match="boundary_min_fill_ratio"):
+        StructureAwareChunker(boundary_min_fill_ratio=0)
+
+
+def test_pure_sac_rhetorical_boundaries_preserve_exact_source_text() -> None:
+    text = (
+        "Menimbang bahwa unsur setiap orang telah terpenuhi "
+        "Terhadap unsur tanpa hak majelis menilai alat bukti yang diajukan "
+        "Oleh karena itu semua unsur tindak pidana telah terpenuhi"
+    )
+    sections = [
+        {
+            "section_label": "pertimbangan_hukum",
+            "section_heading": "PERTIMBANGAN HUKUM",
+            "start_position": 0,
+            "end_position": len(text),
+            "section_text": text,
+        }
+    ]
+
+    chunks = StructureAwareChunker(
+        max_words=12,
+        overlap_words=2,
+        overlap_sentences=0,
+        backfill_short_tail=True,
+        boundary_mode="legal_rhetorical",
+        embedding_context="none",
+    ).chunk("doc", text, sections=sections)
+
+    assert len(chunks) >= 3
+    assert all(len(chunk.text.split()) <= 12 for chunk in chunks)
+    assert all(chunk.embedding_text is None for chunk in chunks)
+    assert all(
+        text[chunk.start_position : chunk.end_position] == chunk.text
+        for chunk in chunks
+    )
+    assert any("Terhadap unsur" in chunk.text for chunk in chunks)
+    assert any("Oleh karena itu" in chunk.text for chunk in chunks)
+
+
+def test_pure_sac_rhetorical_mode_remains_section_local() -> None:
+    first = "Menimbang bahwa dasar dakwaan pertama telah terpenuhi"
+    second = "Mengadili Menjatuhkan pidana penjara selama empat tahun"
+    text = first + "\n" + second
+    second_start = text.index(second)
+    sections = [
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": 0,
+            "end_position": len(first),
+            "section_text": first,
+        },
+        {
+            "section_label": "amar_putusan",
+            "start_position": second_start,
+            "end_position": len(text),
+            "section_text": second,
+        },
+    ]
+
+    chunks = StructureAwareChunker(
+        max_words=20,
+        overlap_words=4,
+        overlap_sentences=0,
+        boundary_mode="legal_rhetorical",
+    ).chunk("doc", text, sections=sections)
+
+    assert {chunk.section_label for chunk in chunks} == {
+        "pertimbangan_hukum",
+        "amar_putusan",
+    }
+    assert all(not ("Menimbang" in chunk.text and "Mengadili" in chunk.text) for chunk in chunks)
+
+
+def test_pure_sac_aligns_full_windows_without_chunk_explosion() -> None:
+    words = [f"w{index}" for index in range(7)]
+    words += ["Menimbang", "bahwa"]
+    words += [f"x{index}" for index in range(18)]
+    text = " ".join(words)
+    sections = [
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": 0,
+            "end_position": len(text),
+            "section_text": text,
+        }
+    ]
+
+    chunks = StructureAwareChunker(
+        max_words=10,
+        overlap_words=2,
+        overlap_sentences=0,
+        boundary_mode="legal_rhetorical",
+    ).chunk("doc", text, sections=sections)
+
+    assert chunks[0].text.split() == words[:7]
+    assert chunks[1].text.split()[:4] == words[5:9]
+    assert len(chunks) <= 4
+    assert all(len(chunk.text.split()) <= 10 for chunk in chunks)
+
+
 def test_structure_aware_bridges_consecutive_oversized_sentences() -> None:
     text = "satu dua tiga empat lima. enam tujuh delapan sembilan sepuluh."
     sections = [

@@ -1,0 +1,14 @@
+extends: default.yaml
+
+# Matched control for the development-only Pure SAC v2 candidate.
+experiment:
+  status: post_hoc_development_control
+
+chunking:
+  strategy: fixed_size
+  max_words: 300
+  overlap_words: 60
+  output_path: data/chunks/fixed_size_matched/chunks.jsonl
+
+retrieval:
+  index_path: vector_db/fixed_size_matched

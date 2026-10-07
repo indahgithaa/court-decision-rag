@@ -52,9 +52,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     available_designs = dict(design_grid(include_experimental=True))
-    selected_names = args.designs or [
-        name for name in available_designs if not name.endswith("_tail")
-    ]
+    selected_names = args.designs or [name for name, _ in design_grid()]
     unknown = sorted(set(selected_names) - set(available_designs))
     if unknown:
         raise ValueError(f"Unknown design(s): {', '.join(unknown)}")
@@ -175,6 +173,20 @@ def design_grid(
                         overlap_sentences=0,
                         embedding_context="section_reasoning_document",
                     ),
+                ),
+                *(
+                    (
+                        f"sac2_w{size}_o{size // 5}_rhet",
+                        StructureAwareChunker(
+                            max_words=size,
+                            overlap_words=size // 5,
+                            overlap_sentences=0,
+                            backfill_short_tail=True,
+                            boundary_mode="legal_rhetorical",
+                            boundary_min_fill_ratio=0.7,
+                        ),
+                    )
+                    for size in (150, 300, 500)
                 ),
             ]
         )

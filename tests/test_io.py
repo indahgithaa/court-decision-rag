@@ -29,3 +29,22 @@ def test_adaptive_structure_config_is_marked_post_hoc() -> None:
         "section_reasoning_document"
     )
 
+
+def test_pure_sac_v2_config_has_no_contextual_embedding() -> None:
+    config = load_config(Path("configs/structure_aware_pure_v2.yaml"))
+
+    assert config["experiment"]["status"] == "post_hoc_development_candidate"
+    assert config["chunking"]["boundary_mode"] == "legal_rhetorical"
+    assert config["chunking"]["boundary_min_fill_ratio"] == 0.7
+    assert config["chunking"]["embedding_context"] == "none"
+
+
+def test_pure_sac_v2_has_a_matched_fixed_control() -> None:
+    fixed = load_config(Path("configs/fixed_size_matched.yaml"))
+    sac = load_config(Path("configs/structure_aware_pure_v2.yaml"))
+
+    assert fixed["experiment"]["status"] == "post_hoc_development_control"
+    assert fixed["chunking"]["strategy"] == "fixed_size"
+    assert fixed["chunking"]["max_words"] == sac["chunking"]["max_words"]
+    assert fixed["chunking"]["overlap_words"] == sac["chunking"]["overlap_words"]
+

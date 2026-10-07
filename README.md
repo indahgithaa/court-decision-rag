@@ -15,13 +15,19 @@ Indonesia.
   eksploratif, bukan konfirmasi blind.
 - Runner generasi jawaban dan evaluasi Faithfulness/Answer Relevance/BERTScore
   belum diimplementasikan. Jangan menyatakan penelitian end-to-end selesai.
-- `configs/structure_aware_adaptive.yaml` menyediakan kandidat post-hoc yang
-  memperbaiki retrieval `pertimbangan_hukum` pada development melalui context
-  hierarchy di embedding. Kandidat ini belum tervalidasi pada holdout baru.
+- `configs/structure_aware_pure_v2.yaml` menyediakan kandidat Pure SAC post-hoc
+  dengan boundary retoris source-only. Pada development 300/60, kandidat ini
+  hanya memperbaiki Recall reasoning secara kecil dan belum menggantikan Pure
+  SAC lama sebagai pemenang agregat.
+- `configs/fixed_size_matched.yaml` adalah kontrol 300/60 yang disetarakan
+  langsung dengan kandidat Pure SAC v2.
+- Generator QA v2 memisahkan tempat lahir dan penahanan, memberi label scope dan
+  quality flag, serta selalu menghasilkan status `draft` untuk review manusia.
 
 Audit lengkap ada di `experiments/research_audit.md`; hasil ringkas v2 ada di
 `experiments/indolaw_200_reproduction_v2.md`; diagnosis reasoning ada di
-`experiments/indolaw_200_reasoning_chunk_ablation.md`.
+`experiments/indolaw_200_reasoning_chunk_ablation.md`; rancangan Pure SAC terbaru
+ada di `experiments/pure_sac_v2_design.md`.
 
 ## Setup
 
@@ -53,6 +59,23 @@ checksum.
 # 3. Development grid, evaluasi, dan freeze desain v2.
 .\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py
 .\.venv\Scripts\python.exe scripts\15_evaluate_indolaw_design_grid.py
+
+# 3a. Opsional: buat draft QA v2 untuk review manusia (development saja).
+.\.venv\Scripts\python.exe scripts\20_prepare_indolaw_questions_v2.py
+
+# 3b. Opsional: ablation Pure SAC v2; tetap development-only.
+.\.venv\Scripts\python.exe scripts\14_build_indolaw_chunk_grid.py `
+  --splits development --designs sac2_w150_o30_rhet sac2_w300_o60_rhet sac2_w500_o100_rhet
+.\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py `
+  --configs sac2_w150_o30_rhet sac2_w300_o60_rhet sac2_w500_o100_rhet `
+  --manifest-output experiments/results/indolaw_200_development_pure_sac_v2_run_manifest.json
+.\.venv\Scripts\python.exe scripts\15_evaluate_indolaw_design_grid.py `
+  --configs fixed_w150_o30 sac_w150_o30_s0 sac2_w150_o30_rhet `
+            fixed_w300_o60 sac_w300_o60_s0 sac2_w300_o60_rhet `
+            fixed_w500_o100 sac_w500_o100_s0 sac2_w500_o100_rhet `
+  --output-json experiments/results/indolaw_200_development_pure_sac_v2_ablation.json `
+  --output-md experiments/results/indolaw_200_development_pure_sac_v2_ablation.md `
+  --no-freeze
 
 # 4. Holdout lama hanya untuk corrected exploratory analysis.
 .\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py `
