@@ -39,9 +39,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         document_prefix=str(embedding.get("document_prefix", "passage: ")),
         normalize_embeddings=bool(embedding.get("normalize_embeddings", True)),
     )
-    matrix = embedder.embed_documents([str(chunk["text"]) for chunk in chunks])
+    matrix = embedder.embed_documents(
+        [str(chunk.get("embedding_text") or chunk["text"]) for chunk in chunks]
+    )
     store = DenseVectorStore(chunks, matrix, model_name=model_name)
-    store.save(output)
+    store.save(
+        output,
+        provenance={
+            "chunks_path": chunks_path.as_posix(),
+            "embedding_text_field": "embedding_text_or_text",
+        },
+    )
     print(
         f"Built {len(chunks)}-chunk index ({store.dimension} dimensions) at {output}"
     )

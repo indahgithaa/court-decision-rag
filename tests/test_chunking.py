@@ -108,6 +108,110 @@ def test_structure_aware_bridges_consecutive_oversized_sentences() -> None:
     assert all(text[chunk.start_position : chunk.end_position] == chunk.text for chunk in chunks)
 
 
+def test_structure_aware_can_backfill_short_section_tail() -> None:
+    text = " ".join(f"w{index}" for index in range(13))
+    sections = [
+        {
+            "section_label": "pertimbangan_hukum",
+            "section_heading": "PERTIMBANGAN HUKUM",
+            "start_position": 0,
+            "end_position": len(text),
+            "section_text": text,
+        }
+    ]
+
+    chunks = StructureAwareChunker(
+        max_words=6,
+        overlap_words=1,
+        overlap_sentences=0,
+        backfill_short_tail=True,
+    ).chunk("doc", text, sections=sections)
+
+    assert [len(chunk.text.split()) for chunk in chunks] == [6, 6, 6]
+    assert chunks[-1].text.split() == ["w7", "w8", "w9", "w10", "w11", "w12"]
+    assert chunks[-1].end_position == len(text)
+    assert all(text[chunk.start_position : chunk.end_position] == chunk.text for chunk in chunks)
+
+
+def test_structure_aware_contextualizes_embedding_without_changing_source_text() -> None:
+    identity = "nama lengkap Siti Aminah tempat lahir Malang umur 30 tahun"
+    reasoning = "menimbang bahwa pasal tersebut telah terpenuhi"
+    text = identity + "\n" + reasoning
+    reasoning_start = text.index(reasoning)
+    sections = [
+        {
+            "section_label": "identitas_terdakwa",
+            "start_position": 0,
+            "end_position": len(identity),
+            "section_text": identity,
+        },
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": reasoning_start,
+            "end_position": len(text),
+            "section_text": reasoning,
+        },
+    ]
+
+    chunks = StructureAwareChunker(
+        max_words=20,
+        overlap_words=0,
+        embedding_context="section_document",
+    ).chunk("doc", text, sections=sections)
+    reasoning_chunk = next(
+        chunk for chunk in chunks if chunk.section_label == "pertimbangan_hukum"
+    )
+
+    assert reasoning_chunk.text == reasoning
+    assert reasoning_chunk.embedding_text == (
+        "perkara terdakwa: Siti Aminah. bagian dokumen: pertimbangan hukum.\n"
+        + reasoning
+    )
+    assert text[reasoning_chunk.start_position : reasoning_chunk.end_position] == reasoning
+
+
+def test_structure_aware_adaptive_context_limits_identity_to_reasoning() -> None:
+    identity = "nama lengkap Siti Aminah tempat lahir Malang umur 30 tahun"
+    charge = "terdakwa didakwa melakukan tindak pidana"
+    reasoning = "menimbang bahwa pasal tersebut telah terpenuhi"
+    text = "\n".join((identity, charge, reasoning))
+    charge_start = text.index(charge)
+    reasoning_start = text.index(reasoning)
+    sections = [
+        {
+            "section_label": "identitas_terdakwa",
+            "start_position": 0,
+            "end_position": len(identity),
+            "section_text": identity,
+        },
+        {
+            "section_label": "riwayat_dakwaan",
+            "start_position": charge_start,
+            "end_position": charge_start + len(charge),
+            "section_text": charge,
+        },
+        {
+            "section_label": "pertimbangan_hukum",
+            "start_position": reasoning_start,
+            "end_position": len(text),
+            "section_text": reasoning,
+        },
+    ]
+    chunks = StructureAwareChunker(
+        max_words=20,
+        overlap_words=0,
+        embedding_context="section_reasoning_document",
+    ).chunk("doc", text, sections=sections)
+    by_label = {chunk.section_label: chunk for chunk in chunks}
+
+    assert "perkara terdakwa: Siti Aminah" not in (
+        by_label["riwayat_dakwaan"].embedding_text or ""
+    )
+    assert "perkara terdakwa: Siti Aminah" in (
+        by_label["pertimbangan_hukum"].embedding_text or ""
+    )
+
+
 def test_invalid_overlap_is_rejected() -> None:
     with pytest.raises(ValueError):
         FixedSizeChunker(max_words=5, overlap_words=5)

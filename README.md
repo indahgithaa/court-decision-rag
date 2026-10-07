@@ -15,9 +15,13 @@ Indonesia.
   eksploratif, bukan konfirmasi blind.
 - Runner generasi jawaban dan evaluasi Faithfulness/Answer Relevance/BERTScore
   belum diimplementasikan. Jangan menyatakan penelitian end-to-end selesai.
+- `configs/structure_aware_adaptive.yaml` menyediakan kandidat post-hoc yang
+  memperbaiki retrieval `pertimbangan_hukum` pada development melalui context
+  hierarchy di embedding. Kandidat ini belum tervalidasi pada holdout baru.
 
 Audit lengkap ada di `experiments/research_audit.md`; hasil ringkas v2 ada di
-`experiments/indolaw_200_reproduction_v2.md`.
+`experiments/indolaw_200_reproduction_v2.md`; diagnosis reasoning ada di
+`experiments/indolaw_200_reasoning_chunk_ablation.md`.
 
 ## Setup
 

@@ -22,10 +22,14 @@ class Chunk:
     end_position: int
     section_label: str | None = None
     section_heading: str | None = None
+    embedding_text: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Return a JSON-serializable representation."""
-        return asdict(self)
+        payload = asdict(self)
+        if self.embedding_text is None:
+            payload.pop("embedding_text")
+        return payload
 
 
 class BaseChunker(ABC):

@@ -1,0 +1,18 @@
+extends: default.yaml
+
+# Post-hoc development candidate. Do not treat as a confirmatory frozen design
+# until it is evaluated on a new blind holdout or an external dataset.
+experiment:
+  status: post_hoc_development_candidate
+
+chunking:
+  strategy: structure_aware
+  max_words: 150
+  overlap_words: 30
+  overlap_sentences: 0
+  backfill_short_tail: false
+  embedding_context: section_reasoning_document
+  output_path: data/chunks/structure_aware_adaptive/chunks.jsonl
+
+retrieval:
+  index_path: vector_db/structure_aware_adaptive

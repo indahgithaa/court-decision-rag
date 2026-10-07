@@ -56,9 +56,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         type=Path,
         default=Path("experiments/indolaw_200_selected_design_v2.json"),
     )
+    parser.add_argument("--configs", nargs="+", default=list(CONFIGS))
+    parser.add_argument(
+        "--no-freeze",
+        action="store_true",
+        help="Write the diagnostic report without writing a frozen selection.",
+    )
     args = parser.parse_args(argv)
 
-    for output in (args.output_json, args.output_md, args.selection_output):
+    outputs = [args.output_json, args.output_md]
+    if not args.no_freeze:
+        outputs.append(args.selection_output)
+    for output in outputs:
         if output.exists():
             raise FileExistsError(f"Refusing to overwrite existing artifact: {output}")
 
@@ -67,7 +76,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     labels = {row["query_id"]: row["target_section_label"] for row in questions}
     evaluations: dict[str, Any] = {}
     shared_evidence_units: dict[str, set[str]] | None = None
-    for name in CONFIGS:
+    for name in args.configs:
         qrels, evidence_qrels = _read_qrels(
             args.qrels_root / f"development_{name}_qrels.csv"
         )
@@ -130,6 +139,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             "s0 and s2 were byte-identical because normalized XML lacks sentence punctuation; "
             "only s0 was indexed"
         ),
+        "selection_status": (
+            "diagnostic_candidate" if args.no_freeze else "frozen"
+        ),
         "selected": selected,
         "evaluations": evaluations,
     }
@@ -152,7 +164,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "embedding_model": "intfloat/multilingual-e5-small",
         "reranking": "none (dense-only, frozen from prior pilot)",
     }
-    args.selection_output.write_text(json.dumps(frozen, indent=2) + "\n", encoding="utf-8")
+    if not args.no_freeze:
+        args.selection_output.write_text(
+            json.dumps(frozen, indent=2) + "\n", encoding="utf-8"
+        )
     print(markdown)
 
 
@@ -222,7 +237,11 @@ def render_markdown(result: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Desain dibekukan",
+            (
+                "## Desain dibekukan"
+                if result.get("selection_status") == "frozen"
+                else "## Kandidat berdasarkan aturan development"
+            ),
             "",
             f"- Fixed-size: `{result['selected']['fixed_size']}`",
             f"- Structure-aware: `{result['selected']['structure_aware']}`",

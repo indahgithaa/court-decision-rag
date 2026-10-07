@@ -228,6 +228,16 @@ menginflasi kebutuhan dengan design effect untuk beberapa asumsi intraclass
 correlation (ICC). MDE, power, dan target dokumen harus dibekukan sebelum hasil
 holdout dibuka.
 
+## Kandidat contextual SAC post-hoc
+
+`embedding_text` boleh memuat konteks hierarkis yang diturunkan deterministik
+dari section/document, sedangkan `text` dan offset evidence wajib tetap identik
+dengan sumber. Kandidat `section_reasoning_document` menambahkan label section
+pada semua embedding dan identitas terdakwa hanya pada section analitis. Ia
+ditemukan setelah diagnosis hasil lama, sehingga statusnya development post-hoc,
+bukan bagian dari frozen design v2. Evaluasi konfirmatori memerlukan holdout baru
+atau dataset eksternal yang belum dibuka.
+
 ## Kriteria kesiapan
 
 Eksperimen embedding dimulai setelah `validate_sac_compliance.py` lulus dan

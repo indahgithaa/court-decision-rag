@@ -54,6 +54,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--runs-root", type=Path, default=Path("experiments/results")
     )
     parser.add_argument(
+        "--manifest-output",
+        type=Path,
+        help="Optional provenance-manifest path for a subset/ablation run.",
+    )
+    parser.add_argument(
         "--dataset-manifest",
         type=Path,
         default=Path("experiments/indolaw_200_manifest.json"),
@@ -95,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         for name in args.configs
     }
     index_paths = {name: args.indexes_root / name for name in args.configs}
-    grid_manifest_path = (
+    grid_manifest_path = args.manifest_output or (
         args.runs_root / f"indolaw_200_{args.split}_grid_run_manifest.json"
     )
     if grid_manifest_path.exists():
@@ -157,7 +162,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"{name}: reused validated index and run")
             continue
         embeddings = embedder.embed_documents(
-            [str(chunk["text"]) for chunk in chunks]
+            [str(chunk.get("embedding_text") or chunk["text"]) for chunk in chunks]
         )
         store = DenseVectorStore(chunks, embeddings, model_name=args.model)
         store.save(
@@ -171,6 +176,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "query_prefix": "query: ",
                 "document_prefix": "passage: ",
                 "normalize_embeddings": True,
+                "embedding_text_field": "embedding_text_or_text",
                 "device": args.device,
             },
         )

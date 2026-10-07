@@ -44,7 +44,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--chunks-root", type=Path, default=Path("data/chunks/indolaw_200")
     )
     parser.add_argument("--splits", nargs="+", default=("development", "holdout"))
+    parser.add_argument(
+        "--designs",
+        nargs="+",
+        help="Build only named designs; experimental designs require explicit selection.",
+    )
     args = parser.parse_args(argv)
+
+    available_designs = dict(design_grid(include_experimental=True))
+    selected_names = args.designs or [
+        name for name in available_designs if not name.endswith("_tail")
+    ]
+    unknown = sorted(set(selected_names) - set(available_designs))
+    if unknown:
+        raise ValueError(f"Unknown design(s): {', '.join(unknown)}")
 
     for split in args.splits:
         pages = list(read_jsonl(args.processed_root / split / "pages.jsonl"))
@@ -60,7 +73,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         for values in sections_by_document.values():
             values.sort(key=lambda row: int(row["start_position"]))
 
-        for name, chunker in design_grid():
+        for name in selected_names:
+            chunker = available_designs[name]
+            directory = args.chunks_root / split / name
+            qrels_path = args.questions_root / f"{split}_{name}_qrels.csv"
+            if (directory / "chunks.jsonl").exists() or qrels_path.exists():
+                raise FileExistsError(
+                    f"Refusing to overwrite artifacts for {split}/{name}"
+                )
             chunks: list[dict[str, Any]] = []
             for document_id, text in sorted(text_by_document.items()):
                 rows = chunker.chunk(
@@ -69,7 +89,6 @@ def main(argv: Sequence[str] | None = None) -> None:
                     sections=sections_by_document.get(document_id),
                 )
                 chunks.extend(row.to_dict() for row in rows)
-            directory = args.chunks_root / split / name
             write_jsonl(directory / "chunks.jsonl", chunks)
             candidates = build_qrel_candidates(questions, chunks)
             complete = [row for row in candidates if int(row["auto_grade"]) == 2]
@@ -88,7 +107,6 @@ def main(argv: Sequence[str] | None = None) -> None:
                 raise RuntimeError(
                     f"{split}/{name} lacks complete evidence chunks for {missing[:5]}"
                 )
-            qrels_path = args.questions_root / f"{split}_{name}_qrels.csv"
             with qrels_path.open("w", encoding="utf-8-sig", newline="") as file:
                 writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
                 writer.writeheader()
@@ -98,8 +116,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
 
 
-def design_grid() -> list[tuple[str, FixedSizeChunker | StructureAwareChunker]]:
-    """Return the preregistered nine design candidates."""
+def design_grid(
+    *, include_experimental: bool = False
+) -> list[tuple[str, FixedSizeChunker | StructureAwareChunker]]:
+    """Return legacy candidates and optional post-hoc development ablations."""
     designs: list[tuple[str, FixedSizeChunker | StructureAwareChunker]] = []
     for size in (150, 300, 500):
         overlap = size // 5
@@ -117,6 +137,47 @@ def design_grid() -> list[tuple[str, FixedSizeChunker | StructureAwareChunker]]:
                     ),
                 )
             )
+    if include_experimental:
+        designs.extend(
+            [
+                (
+                    "sac_w150_o30_s0_tail",
+                    StructureAwareChunker(
+                        max_words=150,
+                        overlap_words=30,
+                        overlap_sentences=0,
+                        backfill_short_tail=True,
+                    ),
+                ),
+                (
+                    "sac_w150_o30_s0_head",
+                    StructureAwareChunker(
+                        max_words=150,
+                        overlap_words=30,
+                        overlap_sentences=0,
+                        embedding_context="section",
+                    ),
+                ),
+                (
+                    "sac_w150_o30_s0_ctx",
+                    StructureAwareChunker(
+                        max_words=150,
+                        overlap_words=30,
+                        overlap_sentences=0,
+                        embedding_context="section_document",
+                    ),
+                ),
+                (
+                    "sac_w150_o30_s0_adaptive",
+                    StructureAwareChunker(
+                        max_words=150,
+                        overlap_words=30,
+                        overlap_sentences=0,
+                        embedding_context="section_reasoning_document",
+                    ),
+                ),
+            ]
+        )
     return designs
 
 

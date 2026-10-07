@@ -19,11 +19,25 @@ class StructureAwareChunker(BaseChunker):
         max_words: int = 300,
         overlap_words: int = 50,
         overlap_sentences: int = 2,
+        backfill_short_tail: bool = False,
+        embedding_context: str = "none",
     ) -> None:
         super().__init__(max_words=max_words, overlap_words=overlap_words)
         if overlap_sentences < 0:
             raise ValueError("overlap_sentences must be greater than or equal to zero")
         self.overlap_sentences = overlap_sentences
+        self.backfill_short_tail = backfill_short_tail
+        if embedding_context not in {
+            "none",
+            "section",
+            "section_document",
+            "section_reasoning_document",
+        }:
+            raise ValueError(
+                "embedding_context must be none, section, section_document, "
+                "or section_reasoning_document"
+            )
+        self.embedding_context = embedding_context
 
     def chunk(
         self,
@@ -45,6 +59,7 @@ class StructureAwareChunker(BaseChunker):
                 }
             ]
 
+        document_context = self._document_context(usable_sections)
         chunks: list[Chunk] = []
         for section in usable_sections:
             section_text = str(section.get("section_text", ""))
@@ -68,9 +83,54 @@ class StructureAwareChunker(BaseChunker):
                             if section.get("section_heading") is not None
                             else None
                         ),
+                        embedding_text=self._embedding_text(
+                            chunk_text,
+                            section_label=str(
+                                section.get("section_label", "unknown")
+                            ),
+                            document_context=document_context,
+                        ),
                     )
                 )
         return chunks
+
+    def _embedding_text(
+        self,
+        text: str,
+        *,
+        section_label: str,
+        document_context: str | None,
+    ) -> str | None:
+        if self.embedding_context == "none":
+            return None
+        parts = [f"bagian dokumen: {section_label.replace('_', ' ')}"]
+        include_document = self.embedding_context == "section_document" or (
+            self.embedding_context == "section_reasoning_document"
+            and section_label in {"pertimbangan_hukum", "fakta_hukum"}
+        )
+        if include_document and document_context:
+            parts.insert(0, f"perkara terdakwa: {document_context}")
+        return ". ".join(parts) + ".\n" + text
+
+    @staticmethod
+    def _document_context(
+        sections: Sequence[Mapping[str, object]],
+    ) -> str | None:
+        identity = next(
+            (
+                str(section.get("section_text", ""))
+                for section in sections
+                if str(section.get("section_label", "")) == "identitas_terdakwa"
+            ),
+            "",
+        )
+        match = re.search(
+            r"\bnama lengkap\s+(.{1,160}?)(?=\s+(?:tempat lahir|umur|tanggal lahir|"
+            r"jenis kelamin|kebangsaan)\b)",
+            identity,
+            flags=re.IGNORECASE,
+        )
+        return " ".join(match.group(1).split()) if match else None
 
     def _sentence_windows(self, text: str, *, offset: int) -> list[tuple[str, int, int]]:
         """Pack complete sentences and carry the previous two into the next chunk.
@@ -119,7 +179,42 @@ class StructureAwareChunker(BaseChunker):
                 next_start += 1
             sentence_start = next_start
 
-        return self._ensure_context_overlap(text, windows, offset=offset)
+        windows = self._ensure_context_overlap(text, windows, offset=offset)
+        return self._backfill_tail(text, windows, offset=offset)
+
+    def _backfill_tail(
+        self,
+        text: str,
+        windows: list[tuple[str, int, int]],
+        *,
+        offset: int,
+    ) -> list[tuple[str, int, int]]:
+        """Anchor an undersized final window to the end of its section.
+
+        Section-local windowing can leave a very short orphan chunk at a
+        boundary. Such a chunk often contains the concluding legal basis but
+        too little surrounding reasoning for dense retrieval. Backfilling adds
+        preceding words from the same section only; source offsets and the
+        maximum word budget remain exact.
+        """
+        if not self.backfill_short_tail or len(windows) < 2:
+            return windows
+
+        last_text, _, last_end = windows[-1]
+        if len(re.findall(r"\S+", last_text)) > max(1, self.max_words // 2):
+            return windows
+
+        relative_end = last_end - offset
+        words = [match for match in re.finditer(r"\S+", text) if match.end() <= relative_end]
+        if len(words) <= self.max_words:
+            return windows
+        relative_start = words[-self.max_words].start()
+        backfilled = (
+            text[relative_start:relative_end],
+            offset + relative_start,
+            last_end,
+        )
+        return [*windows[:-1], backfilled]
 
     def _ensure_context_overlap(
         self,

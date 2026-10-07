@@ -225,6 +225,18 @@ pada `amar_putusan` (0,7812 vs 0,3000) dan `identitas_terdakwa` (0,9613 vs
 0,7355), tetapi menurunkannya pada `pertimbangan_hukum` (0,1625 vs 0,5750).
 Klaim keunggulan merata tidak didukung.
 
+### Diagnosis lanjutan `pertimbangan_hukum`
+
+Ablation development post-hoc menemukan bahwa short tail chunk bukan penyebab
+utama. Penyebab dominan adalah hilangnya konteks hierarkis: pertanyaan memuat
+nama perkara, sementara chunk reasoning lokal sering hanya memuat pasal generik.
+Kandidat `section_reasoning_document` menambahkan heading pada embedding semua
+chunk dan identitas parent hanya pada section analitis, tanpa mengubah teks atau
+offset sumber. Pada development, Recall@5 `pertimbangan_hukum` meningkat dari
+0,2250 menjadi 0,5250 dan Recall@5 keseluruhan dari 0,6687 menjadi 0,7312.
+Kandidat ini berstatus post-hoc dan wajib divalidasi pada data baru; frozen v2
+dan hasil holdout lama tidak diubah.
+
 ## Risiko validitas
 
 - **Construct validity:** chunk-level Recall mungkin tidak merepresentasikan
@@ -289,6 +301,6 @@ Urutan kerja yang langsung dapat dilanjutkan:
   merujuk Gambar 4.3, tetapi gambar tersebut belum tercantum sebelum daftar
   referensi.
 - `python -m compileall -q src scripts tests` lulus.
-- Seluruh test lulus: **74 passed** dengan Python 3.12.10. Test yang memakai
+- Seluruh test lulus: **78 passed** dengan Python 3.12.10. Test yang memakai
   temporary directory harus dijalankan di luar sandbox filesystem; tidak ada
   kegagalan logika atau assertion.

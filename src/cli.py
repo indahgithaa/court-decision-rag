@@ -126,6 +126,10 @@ def chunk_main(argv: Sequence[str] | None = None) -> None:
         chunker = StructureAwareChunker(
             **common_options,
             overlap_sentences=int(chunking.get("overlap_sentences", 2)),
+            backfill_short_tail=bool(
+                chunking.get("backfill_short_tail", False)
+            ),
+            embedding_context=str(chunking.get("embedding_context", "none")),
         )
     else:
         raise ValueError(f"Unknown chunking strategy: {strategy}")
