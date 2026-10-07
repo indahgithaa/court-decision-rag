@@ -27,7 +27,9 @@ Indonesia.
 Audit lengkap ada di `experiments/research_audit.md`; hasil ringkas v2 ada di
 `experiments/indolaw_200_reproduction_v2.md`; diagnosis reasoning ada di
 `experiments/indolaw_200_reasoning_chunk_ablation.md`; rancangan Pure SAC terbaru
-ada di `experiments/pure_sac_v2_design.md`.
+ada di `experiments/pure_sac_v2_design.md`. Perbandingan seluruh konfigurasi,
+cutoff, section, interval bootstrap, dan biaya indeks tersedia di
+`experiments/fixed_vs_pure_sac_comprehensive_evaluation.md`.
 
 ## Setup
 

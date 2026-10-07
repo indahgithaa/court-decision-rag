@@ -255,6 +255,9 @@ MRR@5 turun dari 0,1812 menjadi 0,1729, sedangkan fixed 300/60 mencapai
 Recall@5 0,8000. Pada seleksi nDCG@5 agregat, Pure SAC lama 150/30 tetap kandidat
 terbaik. Pure SAC v2 harus dilaporkan sebagai ablation eksploratif, bukan solusi
 final. Rancangan dan tabel lengkap ada di `experiments/pure_sac_v2_design.md`.
+Evaluasi menyeluruh seluruh cutoff, section, pasangan ukuran, interval bootstrap,
+dan overhead indeks ada di
+`experiments/fixed_vs_pure_sac_comprehensive_evaluation.md`.
 
 ## Risiko validitas
 
