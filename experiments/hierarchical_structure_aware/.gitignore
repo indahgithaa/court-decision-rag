@@ -1,0 +1,3 @@
+# Large reproducible artifacts are kept locally and listed in the manifest.
+artifacts/
+

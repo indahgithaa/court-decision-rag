@@ -1,0 +1,10 @@
+{
+  "status": "passed",
+  "completed_at_utc": "2026-10-08T10:11:27.4332053Z",
+  "suite": "full_repository_including_experiment_tests",
+  "command": ".venv\\Scripts\\python.exe -m pytest -q -p no:cacheprovider",
+  "passed": 122,
+  "failed": 0,
+  "errors": 0,
+  "note": "Executed with normal Windows temporary-directory access after the sandboxed run could not create pytest tmp_path fixtures."
+}

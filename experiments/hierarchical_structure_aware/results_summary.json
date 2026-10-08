@@ -1,0 +1,887 @@
+{
+  "experiment_id": "hierarchical_structure_aware_2026_10_08",
+  "status": "complete",
+  "completed_at_utc": "2026-10-08T10:23:29.013248+00:00",
+  "protocol_status": "exploratory_existing_200_document_benchmark",
+  "dataset": {
+    "documents": 200,
+    "questions": 800,
+    "section_distribution": {
+      "amar_putusan": 200,
+      "identitas_terdakwa": 194,
+      "pertimbangan_hukum": 200,
+      "riwayat_dakwaan": 200,
+      "riwayat_penahanan": 6
+    }
+  },
+  "configuration": {
+    "embedding": {
+      "model_name": "intfloat/multilingual-e5-small",
+      "query_prefix": "query: ",
+      "document_prefix": "passage: ",
+      "normalize_embeddings": true,
+      "max_sequence_length": 512,
+      "batch_size": 16,
+      "device": "cpu"
+    },
+    "retrieval": {
+      "top_k": 50,
+      "reported_cutoffs": [
+        1,
+        3,
+        5,
+        10
+      ],
+      "context_budget_words": 2500,
+      "bootstrap_samples": 10000
+    },
+    "hierarchy": {
+      "parent_words": 500,
+      "parent_overlap_words": 100,
+      "child_words": 150,
+      "child_overlap_words": 30,
+      "parent_score": "maximum_child_score",
+      "parent_ranking": "unique_parent_descending_score"
+    },
+    "methods": {
+      "B1": {
+        "name": "Fixed-Size Chunking",
+        "design": "fixed_w500_o100",
+        "role": "baseline"
+      },
+      "B2": {
+        "name": "Structure-Aware Chunking",
+        "design": "sac_w150_o30_s0",
+        "role": "baseline"
+      },
+      "B3": {
+        "name": "Hierarchical Chunking",
+        "design": "hierarchical_p500_o100_c150_o30",
+        "role": "hierarchical_baseline"
+      },
+      "M1": {
+        "name": "Hierarchical Structure-Aware Chunking",
+        "design": "hierarchical_sac_p500_o100_c150_o30",
+        "role": "proposed"
+      }
+    },
+    "historical_baselines_supplied": {
+      "fixed_size_independent": {
+        "reported_design": "fixed_w500_o100",
+        "recall@5": 0.635,
+        "mrr@5": 0.3638,
+        "ndcg@5": 0.3489
+      },
+      "structure_aware_independent": {
+        "reported_design": "sac_w150_o30_s0",
+        "recall@5": 0.6425,
+        "mrr@5": 0.3935,
+        "ndcg@5": 0.4414
+      }
+    }
+  },
+  "methods": {
+    "B1": {
+      "name": "Fixed-Size Chunking",
+      "design": "fixed_w500_o100",
+      "role": "baseline",
+      "chunk_count": 3527,
+      "parent_count": 0,
+      "qrel_count": 1324,
+      "positive_queries": 800
+    },
+    "B2": {
+      "name": "Structure-Aware Chunking",
+      "design": "sac_w150_o30_s0",
+      "role": "baseline",
+      "chunk_count": 12206,
+      "parent_count": 0,
+      "qrel_count": 1345,
+      "positive_queries": 800
+    },
+    "B3": {
+      "name": "Hierarchical Chunking",
+      "design": "hierarchical_p500_o100_c150_o30",
+      "role": "hierarchical_baseline",
+      "chunk_count": 13828,
+      "parent_count": 3527,
+      "qrel_count": 1614,
+      "positive_queries": 800
+    },
+    "M1": {
+      "name": "Hierarchical Structure-Aware Chunking",
+      "design": "hierarchical_sac_p500_o100_c150_o30",
+      "role": "proposed",
+      "chunk_count": 13811,
+      "parent_count": 4595,
+      "qrel_count": 1424,
+      "positive_queries": 800
+    }
+  },
+  "audit": {
+    "chunks": {
+      "B1": {
+        "source_text_exact": true,
+        "all_source_words_covered": true,
+        "uncovered_source_words": 0,
+        "unique_chunk_ids": true,
+        "valid_offsets": true,
+        "valid_parent_child_mapping": false,
+        "parents_respect_section_boundaries": null,
+        "chunk_count": 3527,
+        "parent_count": 0,
+        "lengths": {
+          "chunk_count": 3527,
+          "word_length": {
+            "min": 101,
+            "mean": 487.75446555146016,
+            "median": 500,
+            "p95": 500.0,
+            "max": 500
+          },
+          "encoder_token_length_with_prefix": {
+            "min": 138,
+            "mean": 678.205557130706,
+            "median": 692,
+            "p95": 745.0,
+            "max": 949
+          },
+          "encoder_limit": 512,
+          "over_encoder_limit": 3380
+        }
+      },
+      "B2": {
+        "source_text_exact": true,
+        "all_source_words_covered": true,
+        "uncovered_source_words": 0,
+        "unique_chunk_ids": true,
+        "valid_offsets": true,
+        "valid_parent_child_mapping": false,
+        "parents_respect_section_boundaries": null,
+        "chunk_count": 12206,
+        "parent_count": 0,
+        "lengths": {
+          "chunk_count": 12206,
+          "word_length": {
+            "min": 7,
+            "mean": 138.38849746026546,
+            "median": 150.0,
+            "p95": 150.0,
+            "max": 150
+          },
+          "encoder_token_length_with_prefix": {
+            "min": 13,
+            "mean": 195.403244306079,
+            "median": 208.0,
+            "p95": 232.0,
+            "max": 327
+          },
+          "encoder_limit": 512,
+          "over_encoder_limit": 0
+        }
+      },
+      "B3": {
+        "source_text_exact": true,
+        "all_source_words_covered": true,
+        "uncovered_source_words": 0,
+        "unique_chunk_ids": true,
+        "valid_offsets": true,
+        "valid_parent_child_mapping": true,
+        "parents_respect_section_boundaries": null,
+        "chunk_count": 13828,
+        "parent_count": 3527,
+        "lengths": {
+          "chunk_count": 13828,
+          "word_length": {
+            "min": 31,
+            "mean": 146.75585768006943,
+            "median": 150.0,
+            "p95": 150.0,
+            "max": 150
+          },
+          "encoder_token_length_with_prefix": {
+            "min": 48,
+            "mean": 206.8557998264391,
+            "median": 208.0,
+            "p95": 231.0,
+            "max": 317
+          },
+          "encoder_limit": 512,
+          "over_encoder_limit": 0
+        }
+      },
+      "M1": {
+        "source_text_exact": true,
+        "all_source_words_covered": true,
+        "uncovered_source_words": 0,
+        "unique_chunk_ids": true,
+        "valid_offsets": true,
+        "valid_parent_child_mapping": true,
+        "parents_respect_section_boundaries": true,
+        "chunk_count": 13811,
+        "parent_count": 4595,
+        "lengths": {
+          "chunk_count": 13811,
+          "word_length": {
+            "min": 7,
+            "mean": 138.1645065527478,
+            "median": 150,
+            "p95": 150.0,
+            "max": 150
+          },
+          "encoder_token_length_with_prefix": {
+            "min": 13,
+            "mean": 195.1835493447252,
+            "median": 206,
+            "p95": 231.0,
+            "max": 320
+          },
+          "encoder_limit": 512,
+          "over_encoder_limit": 0
+        }
+      }
+    },
+    "embedding": {
+      "model_name": "intfloat/multilingual-e5-small",
+      "model_max_sequence_length": 512,
+      "embedding_dimension": 384,
+      "tokenizer": "XLMRobertaTokenizer",
+      "reuse": {
+        "mode": "resume_all_indexes",
+        "reused_vectors": 43372,
+        "new_vectors": 0
+      }
+    },
+    "ground_truth": {
+      "unit": "source evidence span/occurrence",
+      "label_used_for_retrieval": false,
+      "all_methods_cover_all_queries": true,
+      "equivalent_statute_occurrences": true
+    }
+  },
+  "results": {
+    "B1": {
+      "overall": {
+        "recall@1": 0.24375,
+        "mrr@1": 0.24375,
+        "ndcg@1": 0.24375,
+        "recall@3": 0.46125,
+        "mrr@3": 0.3383333333333334,
+        "ndcg@3": 0.3223053955428585,
+        "recall@5": 0.54375,
+        "mrr@5": 0.35739583333333336,
+        "ndcg@5": 0.346760148400324,
+        "recall@10": 0.6175,
+        "mrr@10": 0.36708829365079365,
+        "ndcg@10": 0.3714595088947948
+      },
+      "by_section": {
+        "amar_putusan": {
+          "recall@1": 0.095,
+          "mrr@1": 0.095,
+          "ndcg@1": 0.095,
+          "recall@3": 0.225,
+          "mrr@3": 0.15416666666666667,
+          "ndcg@3": 0.16394151230380294,
+          "recall@5": 0.31,
+          "mrr@5": 0.1741666666666667,
+          "ndcg@5": 0.1962060239642318,
+          "recall@10": 0.38,
+          "mrr@10": 0.18324801587301587,
+          "ndcg@10": 0.2167054428165324
+        },
+        "identitas_terdakwa": {
+          "recall@1": 0.4742268041237113,
+          "mrr@1": 0.4742268041237113,
+          "ndcg@1": 0.4742268041237113,
+          "recall@3": 0.6494845360824743,
+          "mrr@3": 0.552405498281787,
+          "ndcg@3": 0.5773782697533171,
+          "recall@5": 0.7319587628865979,
+          "mrr@5": 0.5707044673539519,
+          "ndcg@5": 0.6108649252771554,
+          "recall@10": 0.8195876288659794,
+          "mrr@10": 0.5819137620684013,
+          "ndcg@10": 0.6387037863346764
+        },
+        "pertimbangan_hukum": {
+          "recall@1": 0.145,
+          "mrr@1": 0.145,
+          "ndcg@1": 0.145,
+          "recall@3": 0.49,
+          "mrr@3": 0.2916666666666667,
+          "ndcg@3": 0.17901855804963365,
+          "recall@5": 0.59,
+          "mrr@5": 0.31516666666666665,
+          "ndcg@5": 0.18536882978893415,
+          "recall@10": 0.655,
+          "mrr@10": 0.3236170634920635,
+          "ndcg@10": 0.21274188098525684
+        },
+        "riwayat_dakwaan": {
+          "recall@1": 0.275,
+          "mrr@1": 0.275,
+          "ndcg@1": 0.275,
+          "recall@3": 0.49,
+          "mrr@3": 0.3675,
+          "ndcg@3": 0.3805499413894223,
+          "recall@5": 0.55,
+          "mrr@5": 0.3815,
+          "ndcg@5": 0.40533784952525936,
+          "recall@10": 0.62,
+          "mrr@10": 0.3912400793650794,
+          "ndcg@10": 0.4276818018447953
+        },
+        "riwayat_penahanan": {
+          "recall@1": 0.0,
+          "mrr@1": 0.0,
+          "ndcg@1": 0.0,
+          "recall@3": 0.3333333333333333,
+          "mrr@3": 0.13888888888888887,
+          "ndcg@3": 0.18848829226190955,
+          "recall@5": 0.5,
+          "mrr@5": 0.1722222222222222,
+          "ndcg@5": 0.25296376013433314,
+          "recall@10": 0.6666666666666666,
+          "mrr@10": 0.19305555555555554,
+          "ndcg@10": 0.3055412395986213
+        }
+      },
+      "context_delivery": {
+        "evidence_hit_rate": 0.54625,
+        "mean_returned_words": 2459.725,
+        "median_returned_words": 2500.0,
+        "mean_context_units": 5.42,
+        "by_section": {
+          "amar_putusan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.315
+          },
+          "identitas_terdakwa": {
+            "query_count": 194,
+            "evidence_hit_rate": 0.7319587628865979
+          },
+          "pertimbangan_hukum": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.59
+          },
+          "riwayat_dakwaan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.555
+          },
+          "riwayat_penahanan": {
+            "query_count": 6,
+            "evidence_hit_rate": 0.5
+          }
+        }
+      },
+      "error_counts": {
+        "evidence_not_in_top50": 38,
+        "evidence_rank_6_to_50": 30,
+        "success_top5": 435,
+        "wrong_document_top5": 66,
+        "wrong_section_top5": 231
+      }
+    },
+    "B2": {
+      "overall": {
+        "recall@1": 0.27375,
+        "mrr@1": 0.27375,
+        "ndcg@1": 0.27375,
+        "recall@3": 0.48,
+        "mrr@3": 0.35604166666666665,
+        "ndcg@3": 0.3806464199025227,
+        "recall@5": 0.6425,
+        "mrr@5": 0.3935416666666666,
+        "ndcg@5": 0.441428213888572,
+        "recall@10": 0.73625,
+        "mrr@10": 0.406969742063492,
+        "ndcg@10": 0.4684278516671712
+      },
+      "by_section": {
+        "amar_putusan": {
+          "recall@1": 0.11,
+          "mrr@1": 0.11,
+          "ndcg@1": 0.11,
+          "recall@3": 0.525,
+          "mrr@3": 0.2783333333333333,
+          "ndcg@3": 0.34106735564286234,
+          "recall@5": 0.79,
+          "mrr@5": 0.3388333333333333,
+          "ndcg@5": 0.4501569121858436,
+          "recall@10": 0.895,
+          "mrr@10": 0.35431944444444446,
+          "ndcg@10": 0.48559517538079705
+        },
+        "identitas_terdakwa": {
+          "recall@1": 0.9278350515463918,
+          "mrr@1": 0.9278350515463918,
+          "ndcg@1": 0.9278350515463918,
+          "recall@3": 0.9432989690721649,
+          "mrr@3": 0.9347079037800687,
+          "ndcg@3": 0.9369168015832108,
+          "recall@5": 0.9484536082474226,
+          "mrr@5": 0.9357388316151203,
+          "ndcg@5": 0.9389108882184405,
+          "recall@10": 0.9536082474226805,
+          "mrr@10": 0.9365979381443298,
+          "ndcg@10": 0.940747007739616
+        },
+        "pertimbangan_hukum": {
+          "recall@1": 0.025,
+          "mrr@1": 0.025,
+          "ndcg@1": 0.025,
+          "recall@3": 0.08,
+          "mrr@3": 0.04583333333333333,
+          "ndcg@3": 0.02699745600293904,
+          "recall@5": 0.175,
+          "mrr@5": 0.06708333333333333,
+          "ndcg@5": 0.03986389238417342,
+          "recall@10": 0.285,
+          "mrr@10": 0.0817936507936508,
+          "ndcg@10": 0.058505791517651416
+        },
+        "riwayat_dakwaan": {
+          "recall@1": 0.06,
+          "mrr@1": 0.06,
+          "ndcg@1": 0.06,
+          "recall@3": 0.4,
+          "mrr@3": 0.19333333333333333,
+          "ndcg@3": 0.2457115704285749,
+          "recall@5": 0.685,
+          "mrr@5": 0.26058333333333333,
+          "ndcg@5": 0.3649484894123838,
+          "recall@10": 0.84,
+          "mrr@10": 0.283265873015873,
+          "ndcg@10": 0.417085842262809
+        },
+        "riwayat_penahanan": {
+          "recall@1": 0.0,
+          "mrr@1": 0.0,
+          "ndcg@1": 0.0,
+          "recall@3": 0.0,
+          "mrr@3": 0.0,
+          "ndcg@3": 0.0,
+          "recall@5": 0.0,
+          "mrr@5": 0.0,
+          "ndcg@5": 0.0,
+          "recall@10": 0.0,
+          "mrr@10": 0.0,
+          "ndcg@10": 0.0
+        }
+      },
+      "context_delivery": {
+        "evidence_hit_rate": 0.76875,
+        "mean_returned_words": 2469.84375,
+        "median_returned_words": 2478.0,
+        "mean_context_units": 20.37,
+        "by_section": {
+          "amar_putusan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.915
+          },
+          "identitas_terdakwa": {
+            "query_count": 194,
+            "evidence_hit_rate": 0.9587628865979382
+          },
+          "pertimbangan_hukum": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.345
+          },
+          "riwayat_dakwaan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.885
+          },
+          "riwayat_penahanan": {
+            "query_count": 6,
+            "evidence_hit_rate": 0.0
+          }
+        }
+      },
+      "error_counts": {
+        "evidence_not_in_top50": 96,
+        "evidence_rank_6_to_50": 48,
+        "success_top5": 514,
+        "wrong_document_top5": 2,
+        "wrong_section_top5": 140
+      }
+    },
+    "B3": {
+      "overall": {
+        "recall@1": 0.21,
+        "mrr@1": 0.21,
+        "ndcg@1": 0.21,
+        "recall@3": 0.4625,
+        "mrr@3": 0.3183333333333333,
+        "ndcg@3": 0.287379835439632,
+        "recall@5": 0.6225,
+        "mrr@5": 0.35427083333333337,
+        "ndcg@5": 0.33595821723467123,
+        "recall@10": 0.76125,
+        "mrr@10": 0.37361706349206353,
+        "ndcg@10": 0.3796688373675122
+      },
+      "by_section": {
+        "amar_putusan": {
+          "recall@1": 0.2,
+          "mrr@1": 0.2,
+          "ndcg@1": 0.2,
+          "recall@3": 0.465,
+          "mrr@3": 0.3158333333333333,
+          "ndcg@3": 0.3333759103381431,
+          "recall@5": 0.665,
+          "mrr@5": 0.36208333333333337,
+          "ndcg@5": 0.41267367889846107,
+          "recall@10": 0.79,
+          "mrr@10": 0.37981944444444443,
+          "ndcg@10": 0.45382602470106986
+        },
+        "identitas_terdakwa": {
+          "recall@1": 0.2422680412371134,
+          "mrr@1": 0.2422680412371134,
+          "ndcg@1": 0.2422680412371134,
+          "recall@3": 0.4793814432989691,
+          "mrr@3": 0.3445017182130584,
+          "ndcg@3": 0.3790469244661307,
+          "recall@5": 0.5979381443298969,
+          "mrr@5": 0.3697594501718213,
+          "ndcg@5": 0.42626629081369544,
+          "recall@10": 0.8092783505154639,
+          "mrr@10": 0.39933930616920305,
+          "ndcg@10": 0.4959999440392878
+        },
+        "pertimbangan_hukum": {
+          "recall@1": 0.325,
+          "mrr@1": 0.325,
+          "ndcg@1": 0.325,
+          "recall@3": 0.61,
+          "mrr@3": 0.4475,
+          "ndcg@3": 0.2516383580305005,
+          "recall@5": 0.715,
+          "mrr@5": 0.4705,
+          "ndcg@5": 0.23452292377774597,
+          "recall@10": 0.795,
+          "mrr@10": 0.48214484126984125,
+          "ndcg@10": 0.24805678989256782
+        },
+        "riwayat_dakwaan": {
+          "recall@1": 0.08,
+          "mrr@1": 0.08,
+          "ndcg@1": 0.08,
+          "recall@3": 0.3,
+          "mrr@3": 0.1708333333333333,
+          "ndcg@3": 0.19052025912202314,
+          "recall@5": 0.52,
+          "mrr@5": 0.22083333333333333,
+          "ndcg@5": 0.2768486666374787,
+          "recall@10": 0.655,
+          "mrr@10": 0.238875,
+          "ndcg@10": 0.326191474977601
+        },
+        "riwayat_penahanan": {
+          "recall@1": 0.0,
+          "mrr@1": 0.0,
+          "ndcg@1": 0.0,
+          "recall@3": 0.3333333333333333,
+          "mrr@3": 0.16666666666666666,
+          "ndcg@3": 0.21030991785715247,
+          "recall@5": 0.3333333333333333,
+          "mrr@5": 0.16666666666666666,
+          "ndcg@5": 0.21030991785715247,
+          "recall@10": 0.6666666666666666,
+          "mrr@10": 0.20899470899470898,
+          "ndcg@10": 0.3160371393567049
+        }
+      },
+      "context_delivery": {
+        "evidence_hit_rate": 0.87375,
+        "mean_returned_words": 2461.2725,
+        "median_returned_words": 2500.0,
+        "mean_context_units": 5.03125,
+        "by_section": {
+          "amar_putusan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.885
+          },
+          "identitas_terdakwa": {
+            "query_count": 194,
+            "evidence_hit_rate": 0.8711340206185567
+          },
+          "pertimbangan_hukum": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.92
+          },
+          "riwayat_dakwaan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.815
+          },
+          "riwayat_penahanan": {
+            "query_count": 6,
+            "evidence_hit_rate": 1.0
+          }
+        }
+      },
+      "error_counts": {
+        "evidence_not_in_top50": 79,
+        "evidence_rank_6_to_50": 71,
+        "success_top5": 498,
+        "wrong_document_top5": 1,
+        "wrong_section_top5": 151
+      }
+    },
+    "M1": {
+      "overall": {
+        "recall@1": 0.27,
+        "mrr@1": 0.27,
+        "ndcg@1": 0.27,
+        "recall@3": 0.47125,
+        "mrr@3": 0.350625,
+        "ndcg@3": 0.3756333052957516,
+        "recall@5": 0.64,
+        "mrr@5": 0.3895,
+        "ndcg@5": 0.4376764397450327,
+        "recall@10": 0.74,
+        "mrr@10": 0.40344990079365084,
+        "ndcg@10": 0.4662395875147638
+      },
+      "by_section": {
+        "amar_putusan": {
+          "recall@1": 0.105,
+          "mrr@1": 0.105,
+          "ndcg@1": 0.105,
+          "recall@3": 0.5,
+          "mrr@3": 0.2633333333333333,
+          "ndcg@3": 0.3234487605714332,
+          "recall@5": 0.77,
+          "mrr@5": 0.32583333333333336,
+          "ndcg@5": 0.4353490561673642,
+          "recall@10": 0.9,
+          "mrr@10": 0.34469841269841267,
+          "ndcg@10": 0.47887930330531797
+        },
+        "identitas_terdakwa": {
+          "recall@1": 0.9278350515463918,
+          "mrr@1": 0.9278350515463918,
+          "ndcg@1": 0.9278350515463918,
+          "recall@3": 0.9432989690721649,
+          "mrr@3": 0.9347079037800687,
+          "ndcg@3": 0.9369168015832108,
+          "recall@5": 0.9432989690721649,
+          "mrr@5": 0.9347079037800687,
+          "ndcg@5": 0.9369168015832108,
+          "recall@10": 0.9536082474226805,
+          "mrr@10": 0.9363033873343152,
+          "ndcg@10": 0.9404711341628055
+        },
+        "pertimbangan_hukum": {
+          "recall@1": 0.025,
+          "mrr@1": 0.025,
+          "ndcg@1": 0.025,
+          "recall@3": 0.06,
+          "mrr@3": 0.03916666666666666,
+          "ndcg@3": 0.021944997575854722,
+          "recall@5": 0.175,
+          "mrr@5": 0.06516666666666666,
+          "ndcg@5": 0.038141650528037446,
+          "recall@10": 0.29,
+          "mrr@10": 0.0797857142857143,
+          "ndcg@10": 0.057091869858541464
+        },
+        "riwayat_dakwaan": {
+          "recall@1": 0.05,
+          "mrr@1": 0.05,
+          "ndcg@1": 0.05,
+          "recall@3": 0.41,
+          "mrr@3": 0.19333333333333333,
+          "ndcg@3": 0.24833016550000406,
+          "recall@5": 0.7,
+          "mrr@5": 0.2603333333333333,
+          "ndcg@5": 0.3684057547490143,
+          "recall@10": 0.845,
+          "mrr@10": 0.2811011904761905,
+          "ndcg@10": 0.41673017675727453
+        },
+        "riwayat_penahanan": {
+          "recall@1": 0.0,
+          "mrr@1": 0.0,
+          "ndcg@1": 0.0,
+          "recall@3": 0.0,
+          "mrr@3": 0.0,
+          "ndcg@3": 0.0,
+          "recall@5": 0.0,
+          "mrr@5": 0.0,
+          "ndcg@5": 0.0,
+          "recall@10": 0.0,
+          "mrr@10": 0.0,
+          "ndcg@10": 0.0
+        }
+      },
+      "context_delivery": {
+        "evidence_hit_rate": 0.8425,
+        "mean_returned_words": 2455.95875,
+        "median_returned_words": 2470.0,
+        "mean_context_units": 9.54,
+        "by_section": {
+          "amar_putusan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.875
+          },
+          "identitas_terdakwa": {
+            "query_count": 194,
+            "evidence_hit_rate": 0.9587628865979382
+          },
+          "pertimbangan_hukum": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.72
+          },
+          "riwayat_dakwaan": {
+            "query_count": 200,
+            "evidence_hit_rate": 0.845
+          },
+          "riwayat_penahanan": {
+            "query_count": 6,
+            "evidence_hit_rate": 0.0
+          }
+        }
+      },
+      "error_counts": {
+        "evidence_not_in_top50": 92,
+        "evidence_rank_6_to_50": 45,
+        "success_top5": 512,
+        "wrong_document_top5": 1,
+        "wrong_section_top5": 150
+      }
+    }
+  },
+  "paired_cluster_bootstrap": {
+    "unit": "document",
+    "samples": 10000,
+    "seed": 42,
+    "comparisons": {
+      "B2_minus_B1": {
+        "recall@5": {
+          "mean_difference": 0.09875,
+          "ci95_low": 0.055,
+          "ci95_high": 0.14125
+        },
+        "mrr@5": {
+          "mean_difference": 0.036145833333333335,
+          "ci95_low": 0.0053328125,
+          "ci95_high": 0.06625156249999999
+        },
+        "ndcg@5": {
+          "mean_difference": 0.09466806548824801,
+          "ci95_low": 0.06553193367401892,
+          "ci95_high": 0.12389440749109787
+        }
+      },
+      "B3_minus_B1": {
+        "recall@5": {
+          "mean_difference": 0.07875,
+          "ci95_low": 0.03375,
+          "ci95_high": 0.12375
+        },
+        "mrr@5": {
+          "mean_difference": -0.003125000000000001,
+          "ci95_low": -0.036626041666666664,
+          "ci95_high": 0.029335416666666635
+        },
+        "ndcg@5": {
+          "mean_difference": -0.01080193116565279,
+          "ci95_low": -0.03937719980795835,
+          "ci95_high": 0.018588624879773776
+        }
+      },
+      "M1_minus_B1": {
+        "recall@5": {
+          "mean_difference": 0.09625,
+          "ci95_low": 0.05125,
+          "ci95_high": 0.13875
+        },
+        "mrr@5": {
+          "mean_difference": 0.03210416666666667,
+          "ci95_low": 0.0012078124999999995,
+          "ci95_high": 0.06225052083333332
+        },
+        "ndcg@5": {
+          "mean_difference": 0.09091629134470862,
+          "ci95_low": 0.061922185008017,
+          "ci95_high": 0.12023818027616467
+        }
+      },
+      "B3_minus_B2": {
+        "recall@5": {
+          "mean_difference": -0.02,
+          "ci95_low": -0.055,
+          "ci95_high": 0.01625
+        },
+        "mrr@5": {
+          "mean_difference": -0.03927083333333334,
+          "ci95_low": -0.06497916666666667,
+          "ci95_high": -0.013811458333333347
+        },
+        "ndcg@5": {
+          "mean_difference": -0.1054699966539008,
+          "ci95_low": -0.12705961359224693,
+          "ci95_high": -0.0838421086671894
+        }
+      },
+      "M1_minus_B2": {
+        "recall@5": {
+          "mean_difference": -0.0025,
+          "ci95_low": -0.01625,
+          "ci95_high": 0.01125
+        },
+        "mrr@5": {
+          "mean_difference": -0.0040416666666666665,
+          "ci95_low": -0.010042187499999999,
+          "ci95_high": 0.002
+        },
+        "ndcg@5": {
+          "mean_difference": -0.003751774143539382,
+          "ci95_low": -0.009189850483662538,
+          "ci95_high": 0.0015554157610728565
+        }
+      },
+      "M1_minus_B3": {
+        "recall@5": {
+          "mean_difference": 0.0175,
+          "ci95_low": -0.01875,
+          "ci95_high": 0.05375
+        },
+        "mrr@5": {
+          "mean_difference": 0.035229166666666666,
+          "ci95_low": 0.009144270833333336,
+          "ci95_high": 0.0611671875
+        },
+        "ndcg@5": {
+          "mean_difference": 0.10171822251036142,
+          "ci95_low": 0.0796138339052466,
+          "ci95_high": 0.1233688448109338
+        }
+      }
+    }
+  },
+  "testing": {
+    "status": "passed",
+    "completed_at_utc": "2026-10-08T10:11:27.4332053Z",
+    "suite": "full_repository_including_experiment_tests",
+    "command": ".venv\\Scripts\\python.exe -m pytest -q -p no:cacheprovider",
+    "passed": 122,
+    "failed": 0,
+    "errors": 0,
+    "note": "Executed with normal Windows temporary-directory access after the sandboxed run could not create pytest tmp_path fixtures."
+  },
+  "environment": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "packages": {
+      "numpy": "2.5.3",
+      "sentence-transformers": "5.7.0",
+      "torch": "2.14.1",
+      "transformers": "5.19.0"
+    },
+    "git_commit_before_experiment": "7c171927a891144cf1eec2a7b1bec8d0ddee79a2",
+    "git_dirty_after_new_experiment_files": true
+  }
+}
