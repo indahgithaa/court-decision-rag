@@ -1,8 +1,8 @@
-# Court Decision RAG — Structure-Aware Chunking
+# Court Decision RAG — Hybrid Structure- and Summary-Augmented Chunking
 
-Pipeline penelitian untuk membandingkan fixed-size chunking dan
-structure-aware chunking (SAC) pada retrieval dan legal QA putusan pengadilan
-Indonesia.
+Pipeline penelitian retrieval dan legal QA putusan pengadilan Indonesia.
+Eksperimen terbaru menggabungkan structure-aware chunking, document
+fingerprint, dan konteks bagian retoris secara hierarkis.
 
 ## Status penelitian
 
@@ -11,16 +11,16 @@ Indonesia.
   untuk kedua strategi; MRR@K dan nDCG@K dihitung pada ranking chunk.
 - Reproduksi Indo-Law 200 selesai secara lokal, tetapi memakai XML dengan gold
   section. Hasilnya adalah oracle-structure robustness experiment.
-- Holdout Indo-Law lama pernah dibuka sebelum schema v2 dibekukan. Hasilnya
-  eksploratif, bukan konfirmasi blind.
+- Desain skripsi aktif tidak membagi corpus menjadi development/holdout.
+  Fixed-size, structure-aware, dan hybrid dibandingkan pada satu corpus yang
+  sama: 200 dokumen dan 800 pertanyaan. Karena desain dikembangkan dengan
+  corpus tersebut, hasilnya bersifat komparatif eksploratif.
+- Pada corpus tunggal, `hybrid_hier_w150_o30_s0` mencapai Recall@5 0,6613,
+  MRR@5 0,4510, nDCG@5 0,4522, dan DRM@5 0,0262. Hybrid memperbaiki ranking
+  agregat dan provenance dokumen, tetapi tidak mengungguli baseline pada semua
+  bagian retoris.
 - Runner generasi jawaban dan evaluasi Faithfulness/Answer Relevance/BERTScore
   belum diimplementasikan. Jangan menyatakan penelitian end-to-end selesai.
-- `configs/structure_aware_pure_v2.yaml` menyediakan kandidat Pure SAC post-hoc
-  dengan boundary retoris source-only. Pada development 300/60, kandidat ini
-  hanya memperbaiki Recall reasoning secara kecil dan belum menggantikan Pure
-  SAC lama sebagai pemenang agregat.
-- `configs/fixed_size_matched.yaml` adalah kontrol 300/60 yang disetarakan
-  langsung dengan kandidat Pure SAC v2.
 - Generator QA v2 memisahkan tempat lahir dan penahanan, memberi label scope dan
   quality flag, serta selalu menghasilkan status `draft` untuk review manusia.
 
@@ -30,6 +30,9 @@ Audit lengkap ada di `experiments/research_audit.md`; hasil ringkas v2 ada di
 ada di `experiments/pure_sac_v2_design.md`. Perbandingan seluruh konfigurasi,
 cutoff, section, interval bootstrap, dan biaya indeks tersedia di
 `experiments/fixed_vs_pure_sac_comprehensive_evaluation.md`.
+Perancangan dan hasil hybrid terbaru ada di
+`experiments/hybrid_structure_summary_design.md`, dengan ringkasan numerik di
+`experiments/hybrid_chunking_final_results.json`.
 
 ## Setup
 
@@ -41,48 +44,42 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -p no:cacheprovider
 ```
 
-## Reproduksi Indo-Law v2
+## Reproduksi eksperimen corpus tunggal
 
-Jalankan tahap preparasi pada artifact root yang bersih karena script 12–14
-meregenerasi file turunannya. Runner retrieval dan evaluator v2 menolak
-overwrite hasil/index yang sudah ada. Direktori data, index, dan raw results
-diabaikan Git karena ukurannya; simpan salinannya dalam registry terpisah beserta
-checksum.
+Pipeline aktif memakai tepat satu collection bernama `corpus`. Script menolak
+overwrite artefak retrieval yang sudah ada. Direktori data, index, dan raw
+results diabaikan Git karena ukurannya; simpan salinannya beserta checksum.
 
 ```powershell
-# 1. Restore tepat 200 XML dari commit dan hash pada manifest.
+# 1. Restore 200 XML, lalu bangun satu corpus dan satu set pertanyaan.
 .\.venv\Scripts\python.exe scripts\18_restore_indolaw_from_manifest.py
-
-# 2. Bangun corpus, pertanyaan, chunks, dan qrels.
 .\.venv\Scripts\python.exe scripts\12_prepare_indolaw_corpus.py
 .\.venv\Scripts\python.exe scripts\13_prepare_indolaw_questions.py
-.\.venv\Scripts\python.exe scripts\14_build_indolaw_chunk_grid.py
 
-# 3. Development grid, evaluasi, dan freeze desain v2.
-.\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py
-.\.venv\Scripts\python.exe scripts\15_evaluate_indolaw_design_grid.py
+# 2. Buat konteks dokumen dan konteks bagian yang source-grounded.
+.\.venv\Scripts\python.exe scripts\21_generate_indolaw_summaries.py `
+  --collections corpus `
+  --output-root data/processed/indolaw_200/document_summaries_corpus
 
-# 3a. Opsional: buat draft QA v2 untuk review manusia (development saja).
-.\.venv\Scripts\python.exe scripts\20_prepare_indolaw_questions_v2.py
-
-# 3b. Opsional: ablation Pure SAC v2; tetap development-only.
+# 3. Bangun tiga metode yang dibandingkan pada konfigurasi matched 150/30.
 .\.venv\Scripts\python.exe scripts\14_build_indolaw_chunk_grid.py `
-  --splits development --designs sac2_w150_o30_rhet sac2_w300_o60_rhet sac2_w500_o100_rhet
-.\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py `
-  --configs sac2_w150_o30_rhet sac2_w300_o60_rhet sac2_w500_o100_rhet `
-  --manifest-output experiments/results/indolaw_200_development_pure_sac_v2_run_manifest.json
-.\.venv\Scripts\python.exe scripts\15_evaluate_indolaw_design_grid.py `
-  --configs fixed_w150_o30 sac_w150_o30_s0 sac2_w150_o30_rhet `
-            fixed_w300_o60 sac_w300_o60_s0 sac2_w300_o60_rhet `
-            fixed_w500_o100 sac_w500_o100_s0 sac2_w500_o100_rhet `
-  --output-json experiments/results/indolaw_200_development_pure_sac_v2_ablation.json `
-  --output-md experiments/results/indolaw_200_development_pure_sac_v2_ablation.md `
-  --no-freeze
+  --collections corpus `
+  --summaries-root data/processed/indolaw_200/document_summaries_corpus `
+  --designs fixed_w150_o30 sac_w150_o30_s0 hybrid_hier_w150_o30_s0
 
-# 4. Holdout lama hanya untuk corrected exploratory analysis.
+# 4. Bangun indeks dan jalankan semua 800 kueri terhadap 200 dokumen.
 .\.venv\Scripts\python.exe scripts\19_run_indolaw_development_grid.py `
-  --split holdout --configs fixed_w500_o100 sac_w150_o30_s0
-.\.venv\Scripts\python.exe scripts\16_evaluate_indolaw_holdout.py
+  --collection corpus `
+  --configs fixed_w150_o30 sac_w150_o30_s0 hybrid_hier_w150_o30_s0 `
+  --manifest-output experiments/results/indolaw_200_corpus_hybrid_run_manifest.json
+
+# 5. Hitung metrik agregat, per bagian, dan paired document bootstrap.
+.\.venv\Scripts\python.exe scripts\22_evaluate_hybrid_chunking.py `
+  --collection corpus `
+  --configs fixed_w150_o30 sac_w150_o30_s0 hybrid_hier_w150_o30_s0 `
+  --evaluation-stage single_corpus_exploratory `
+  --output-json experiments/results/indolaw_200_corpus_hybrid_final.json `
+  --output-md experiments/results/indolaw_200_corpus_hybrid_final.md
 ```
 
 Model embedding yang dibekukan adalah
@@ -92,7 +89,7 @@ dokumen eksperimen.
 
 ## Struktur penting
 
-- `src/chunking/`: fixed-size dan SAC.
+- `src/chunking/`: fixed-size, structure-aware, dan summary augmentation.
 - `src/evaluation/`: qrels, Recall/MRR/nDCG, bootstrap, dan report.
 - `src/retrieval/`: dense vector store lokal berbasis NumPy.
 - `scripts/`: pipeline data, grid retrieval, evaluasi, dan restore.
@@ -102,7 +99,8 @@ dokumen eksperimen.
 ## Aturan klaim
 
 Jangan menyebut hasil Indo-Law sebagai evaluasi PDF/deteksi struktur otomatis,
-jangan menyebut holdout lama sebagai blind/final, dan jangan menghidupkan kembali
-Hit@K. Sebelum klaim utama, diperlukan validasi manusia atas QA/evidence,
-eksperimen PDF atau validasi eksternal yang belum dibuka, serta evaluasi generasi
-yang benar-benar diimplementasikan.
+hasil test-set independen, atau bukti generalisasi ke data baru. Jangan
+menghidupkan kembali Hit@K. Hasil aktif adalah evaluasi komparatif eksploratif
+pada satu corpus. Klaim generalisasi memerlukan validasi manusia atas QA/evidence
+dan evaluasi eksternal terpisah; itu tidak mengharuskan corpus Indo-Law 200 ini
+dibagi menjadi development/holdout.

@@ -53,9 +53,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--summaries-root",
         type=Path,
         default=Path("data/processed/indolaw_200/document_summaries"),
-        help="Directory containing one <split>.jsonl document-summary file.",
+        help="Directory containing one <collection>.jsonl context file.",
     )
-    parser.add_argument("--splits", nargs="+", default=("development", "holdout"))
+    parser.add_argument(
+        "--collections",
+        "--splits",
+        dest="collections",
+        nargs="+",
+        choices=("corpus", "development", "holdout"),
+        default=("corpus",),
+        help="Corpus collection(s); 'corpus' is the unsplit thesis benchmark.",
+    )
     parser.add_argument(
         "--designs",
         nargs="+",
@@ -76,9 +84,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     if unknown:
         raise ValueError(f"Unknown design(s): {', '.join(unknown)}")
 
-    for split in args.splits:
-        pages = list(read_jsonl(args.processed_root / split / "pages.jsonl"))
-        sections = list(read_jsonl(args.processed_root / split / "sections.jsonl"))
+    for collection in args.collections:
+        pages = list(read_jsonl(args.processed_root / collection / "pages.jsonl"))
+        sections = list(
+            read_jsonl(args.processed_root / collection / "sections.jsonl")
+        )
         summary_design_requested = any(
             name.startswith(("summary_fixed_", "hybrid_"))
             for name in selected_names
@@ -86,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         summaries: dict[str, str] = {}
         hierarchical_contexts: dict[str, dict[str, Any]] = {}
         if summary_design_requested:
-            summary_path = args.summaries_root / f"{split}.jsonl"
+            summary_path = args.summaries_root / f"{collection}.jsonl"
             summary_rows = list(read_jsonl(summary_path))
             summaries = {
                 str(row["document_id"]): str(row["summary"])
@@ -107,7 +117,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 hierarchical_contexts=hierarchical_contexts,
             )
         )
-        with (args.questions_root / f"{split}_questions.csv").open(
+        with (args.questions_root / f"{collection}_questions.csv").open(
             "r", encoding="utf-8-sig", newline=""
         ) as file:
             questions = list(csv.DictReader(file))
@@ -116,7 +126,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             missing = sorted(set(text_by_document) - set(summaries))
             extra = sorted(set(summaries) - set(text_by_document))
             raise ValueError(
-                f"Summary/document mismatch for {split}: "
+                f"Summary/document mismatch for {collection}: "
                 f"missing={missing[:5]}, extra={extra[:5]}"
             )
         sections_by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -127,11 +137,11 @@ def main(argv: Sequence[str] | None = None) -> None:
 
         for name in selected_names:
             chunker = available_designs[name]
-            directory = args.chunks_root / split / name
-            qrels_path = args.questions_root / f"{split}_{name}_qrels.csv"
+            directory = args.chunks_root / collection / name
+            qrels_path = args.questions_root / f"{collection}_{name}_qrels.csv"
             if (directory / "chunks.jsonl").exists() or qrels_path.exists():
                 raise FileExistsError(
-                    f"Refusing to overwrite artifacts for {split}/{name}"
+                    f"Refusing to overwrite artifacts for {collection}/{name}"
                 )
             chunks: list[dict[str, Any]] = []
             for document_id, text in sorted(text_by_document.items()):
@@ -157,14 +167,15 @@ def main(argv: Sequence[str] | None = None) -> None:
             if covered != expected:
                 missing = sorted(expected - covered)
                 raise RuntimeError(
-                    f"{split}/{name} lacks complete evidence chunks for {missing[:5]}"
+                    f"{collection}/{name} lacks complete evidence chunks for {missing[:5]}"
                 )
             with qrels_path.open("w", encoding="utf-8-sig", newline="") as file:
                 writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
                 writer.writeheader()
                 writer.writerows(complete)
             print(
-                f"{split}/{name}: {len(chunks)} chunks; {len(complete)} positive qrels"
+                f"{collection}/{name}: {len(chunks)} chunks; "
+                f"{len(complete)} positive qrels"
             )
 
 

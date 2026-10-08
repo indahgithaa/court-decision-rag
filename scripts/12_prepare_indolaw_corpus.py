@@ -1,4 +1,4 @@
-"""Convert the frozen Indo-Law sample into pipeline pages and gold sections."""
+"""Convert the complete Indo-Law sample into one evaluation corpus."""
 
 from __future__ import annotations
 
@@ -36,22 +36,23 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    by_split: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    outputs: dict[str, list[dict[str, Any]]] = {"pages": [], "sections": []}
     for record in manifest["documents"]:
-        split = str(record["split"])
-        outputs = by_split.setdefault(split, {"pages": [], "sections": []})
         page, sections = convert_xml(Path(record["local_file"]))
         outputs["pages"].append(page)
         outputs["sections"].extend(sections)
 
-    for split, outputs in sorted(by_split.items()):
-        directory = args.output_root / split
-        page_count = write_jsonl(directory / "pages.jsonl", outputs["pages"])
-        section_count = write_jsonl(directory / "sections.jsonl", outputs["sections"])
-        print(
-            f"{split}: wrote {page_count} documents and {section_count} sections "
-            f"to {directory}"
-        )
+    outputs["pages"].sort(key=lambda row: str(row["document_id"]))
+    outputs["sections"].sort(
+        key=lambda row: (str(row["document_id"]), int(row["start_position"]))
+    )
+    directory = args.output_root / "corpus"
+    page_count = write_jsonl(directory / "pages.jsonl", outputs["pages"])
+    section_count = write_jsonl(directory / "sections.jsonl", outputs["sections"])
+    print(
+        f"corpus: wrote {page_count} documents and {section_count} sections "
+        f"to {directory}"
+    )
 
 
 def convert_xml(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:

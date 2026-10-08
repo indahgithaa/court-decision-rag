@@ -1,0 +1,119 @@
+{
+  "method": "hierarchical structure-aware summary-augmented chunking",
+  "design": "hybrid_hier_w150_o30_s0",
+  "evaluation_design": {
+    "collection": "corpus",
+    "corpus_partitioning": "none",
+    "documents": 200,
+    "queries": 800,
+    "status": "single_corpus_exploratory_comparison",
+    "independent_test_set": false
+  },
+  "model": "intfloat/multilingual-e5-small",
+  "maximum_words": 150,
+  "overlap_words": 30,
+  "embedding_token_audit": {
+    "model_limit": 512,
+    "chunk_count": 12206,
+    "maximum_tokens": 379,
+    "p95_tokens": 279,
+    "over_limit": 0
+  },
+  "evaluations": {
+    "fixed_w150_o30": {
+      "chunks": 11605,
+      "recall@5": 0.635,
+      "mrr@5": 0.3638333333,
+      "ndcg@5": 0.3489394196,
+      "drm@5": 0.062
+    },
+    "sac_w150_o30_s0": {
+      "chunks": 12206,
+      "recall@5": 0.6425,
+      "mrr@5": 0.3935416667,
+      "ndcg@5": 0.4414282139,
+      "drm@5": 0.10275
+    },
+    "hybrid_hier_w150_o30_s0": {
+      "chunks": 12206,
+      "recall@5": 0.66125,
+      "mrr@5": 0.4509583333,
+      "ndcg@5": 0.4522236942,
+      "drm@5": 0.02625
+    }
+  },
+  "hybrid_minus_fixed": {
+    "recall@5": {
+      "difference": 0.02625,
+      "ci95": [-0.01375, 0.065]
+    },
+    "mrr@5": {
+      "difference": 0.087125,
+      "ci95": [0.0579791667, 0.1156880208]
+    },
+    "ndcg@5": {
+      "difference": 0.1032842746,
+      "ci95": [0.0776972781, 0.1283590148]
+    },
+    "drm@5": {
+      "difference": -0.03575,
+      "ci95": [-0.04950625, -0.02375]
+    }
+  },
+  "hybrid_minus_structure_aware": {
+    "recall@5": {
+      "difference": 0.01875,
+      "ci95": [-0.01, 0.0475]
+    },
+    "mrr@5": {
+      "difference": 0.0574166667,
+      "ci95": [0.0387901042, 0.0762921875]
+    },
+    "ndcg@5": {
+      "difference": 0.0107954803,
+      "ci95": [-0.0061375257, 0.0273245553]
+    },
+    "drm@5": {
+      "difference": -0.0765,
+      "ci95": [-0.0925, -0.06125]
+    }
+  },
+  "recall@5_by_section": {
+    "amar_putusan": {
+      "questions": 200,
+      "fixed": 0.64,
+      "structure_aware": 0.79,
+      "hybrid": 0.585
+    },
+    "identitas_terdakwa": {
+      "questions": 194,
+      "fixed": 0.6494845361,
+      "structure_aware": 0.9484536082,
+      "hybrid": 0.9793814433
+    },
+    "pertimbangan_hukum": {
+      "questions": 200,
+      "fixed": 0.74,
+      "structure_aware": 0.175,
+      "hybrid": 0.645
+    },
+    "riwayat_dakwaan": {
+      "questions": 200,
+      "fixed": 0.515,
+      "structure_aware": 0.685,
+      "hybrid": 0.455
+    },
+    "riwayat_penahanan": {
+      "questions": 6,
+      "fixed": 0.5,
+      "structure_aware": 0.0,
+      "hybrid": 0.3333333333
+    }
+  },
+  "claim_boundary": "Hybrid improves aggregate ranking quality and document provenance on this corpus, but does not outperform every baseline in every rhetorical section. The single-corpus exploratory design does not estimate generalization to unseen data.",
+  "detailed_local_artifacts": {
+    "evaluation": "experiments/results/indolaw_200_corpus_hybrid_final.json",
+    "report": "experiments/results/indolaw_200_corpus_hybrid_final.md",
+    "run_manifest": "experiments/results/indolaw_200_corpus_hybrid_run_manifest.json"
+  }
+}

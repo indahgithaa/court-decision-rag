@@ -1,26 +1,40 @@
-# Audit awal penelitian SAC vs fixed-size
+# Audit penelitian chunking putusan pengadilan
 
 Tanggal audit: 7 Oktober 2026  
 Commit yang diaudit: `62f55d60aac0d82308c10876065e3de3b13d1f40` (`main`)  
 Draft yang diaudit: `Draft Skripsi - Putu Indah Githa Cahyani - 235150200111041 (1).pdf`  
-Status keseluruhan: **PARTIAL - penelitian belum selesai secara eksperimen**
+Status keseluruhan: **PARTIAL - eksperimen retrieval hybrid selesai secara
+eksploratif; evaluasi end-to-end/PDF belum selesai**
 
 ## Ringkasan eksekutif
+
+**Pembaruan 8 Oktober 2026 (keputusan aktif):** corpus Indo-Law 200 tidak lagi
+dibagi menjadi development/holdout untuk analisis skripsi. Fixed-size,
+structure-aware, dan hybrid dievaluasi pada satu indeks berisi 200 dokumen dan
+800 pertanyaan. Hybrid `hybrid_hier_w150_o30_s0` memperoleh Recall@5 0,6613,
+MRR@5 0,4510, nDCG@5 0,4522, dan DRM@5 0,0262. Dibanding fixed 150/30,
+peningkatan MRR/nDCG dan penurunan DRM memiliki CI 95% yang tidak melintasi nol;
+peningkatan Recall belum demikian. Hybrid tidak unggul pada setiap bagian,
+sehingga klaim dominasi per-section tidak diperbolehkan. Karena desain telah
+dikembangkan dengan corpus yang sama, status hasil adalah **evaluasi komparatif
+eksploratif**, bukan performa test-set independen. Detail ada di
+`experiments/hybrid_structure_summary_design.md`.
+
+Semua rujukan development/holdout pada bagian historis dokumen audit ini
+mendeskripsikan eksperimen lama dan **bukan desain skripsi aktif**.
 
 Repository sudah memiliki implementasi dasar ekstraksi PDF, pembersihan teks,
 deteksi struktur, fixed-size chunking, structure-aware chunking (SAC), dense
 retrieval, tiga metrik retrieval resmi, paired cluster bootstrap, dan persiapan
-input generasi yang menyamakan anggaran konteks. Desain eksternal Indo-Law 200
-juga sudah memisahkan 40 dokumen development dan 160 dokumen holdout berdasarkan
-pengadilan.
+input generasi yang menyamakan anggaran konteks. Desain aktif Indo-Law 200
+memakai seluruh dokumen sebagai satu corpus evaluasi.
 
 Namun, angka retrieval tidak dapat dianggap sebagai hasil final skripsi.
 Seluruh 200 XML telah direstorasi dari commit sumber terpin dan diverifikasi
-terhadap SHA-256 manifest; development grid serta holdout lama juga sudah
-direproduksi dengan raw qrels, rankings, index, laporan, dan run manifest lokal.
-Holdout Indo-Law telah dibuka sebelum perubahan metrik dan pemilihan ulang
-baseline pada 6 Oktober 2026, sehingga hasil koreksinya tetap eksploratif. Selain
-itu, eksperimen memakai XML ternormalisasi dengan section bawaan, sedangkan
+terhadap SHA-256 manifest. Evaluasi corpus tunggal telah direproduksi dengan raw
+qrels, rankings, index, laporan, dan run manifest lokal. Hasil tetap eksploratif
+karena desain dikembangkan secara iteratif pada corpus yang sama. Selain itu,
+eksperimen memakai XML ternormalisasi dengan section bawaan, sedangkan
 draft mengklaim pipeline utama dimulai dari PDF dan melakukan identifikasi
 struktur otomatis. Hasil Indo-Law hanya boleh disebut **oracle-structure
 robustness experiment**.
@@ -43,24 +57,25 @@ retry/failure policy, dan artefak latency end-to-end juga belum ada.
 | Komponen | Status | Bukti dan alasan |
 |---|---|---|
 | Rumusan masalah dan tujuan | DONE | Draft menetapkan penerapan dan perbandingan SAC dengan chunking konvensional pada performa retrieval dan kualitas jawaban. |
-| Corpus Indo-Law 200 dan manifest | DONE (reproduksi lokal) | Seluruh 200 XML direstorasi dari commit sumber terpin; byte dan SHA-256 semuanya cocok. Manifest berisi 71 pengadilan dan split 40/160 tanpa overlap pengadilan. |
+| Corpus Indo-Law 200 dan manifest | DONE (reproduksi lokal) | Seluruh 200 XML direstorasi dari commit sumber terpin; byte dan SHA-256 semuanya cocok. Pipeline aktif menggabungkannya menjadi satu collection `corpus`. |
 | Corpus PDF utama | NOT STARTED | Direktori data hanya berisi `.gitkeep`; tidak ada corpus PDF, manifest final, atau split PDF holdout. |
-| QA dataset Indo-Law | PARTIAL (draft v2 tersedia) | Benchmark lama berisi 160 pertanyaan development dan 640 holdout dengan label `approved` otomatis. Generator v2 menghasilkan 188 draft development: tempat lahir dan penahanan dipisahkan, evidence section/anchor/method/quality flag dicatat, kandidat ambigu ditolak, dan semua baris menunggu review manusia. |
+| QA dataset Indo-Law | PARTIAL (review manusia belum selesai) | Benchmark aktif berisi 800 pertanyaan pada satu corpus dengan label `approved` otomatis. Evidence span dan `evidence_id` tersedia, tetapi validasi manusia tetap diperlukan. |
 | QA dataset PDF | NOT STARTED | Tidak ada pertanyaan, gold answer, evidence span, atau qrels final untuk corpus PDF. |
-| Split development/holdout Indo-Law | DONE | Manifest menunjukkan 40 development dan 160 holdout, dikelompokkan berdasarkan pengadilan tanpa overlap. |
+| Pembagian corpus Indo-Law | NOT APPLICABLE | Desain skripsi aktif sengaja memakai satu corpus 200 dokumen tanpa development/holdout. |
 | Split development/holdout PDF | NOT STARTED | Protokol ada, tetapi corpus dan artefaknya tidak tersedia. |
 | Ekstraksi PDF | PARTIAL | Implementasi PyMuPDF dan test sintetis tersedia; belum divalidasi pada corpus final dan tidak ada hasil ekstraksi. |
 | Pembersihan teks | PARTIAL | Implementasi dan test pola boilerplate tersedia. Draft menyebut lowercasing serta penghapusan gambar/tabel/garis; implementasi tidak melakukan lowercasing dan hanya bekerja pada teks hasil ekstraksi. Perbedaan perlu diselaraskan. |
 | Deteksi struktur otomatis | PARTIAL | Detector regex, fallback `unknown`, preservasi karakter, dan test sintetis tersedia. Belum ada hasil audit manusia pada holdout PDF yang tidak dipakai mengembangkan regex. |
-| Fixed-size chunking | DONE (kode) / PARTIAL (validasi) | Implementasi word-window dan overlap tersedia serta diuji secara unit; konfigurasi utama YAML masih 300/50, berbeda dari desain Indo-Law terpilih 500/100. |
-| SAC | DONE (kode) / PARTIAL (validasi) | Implementasi menjaga batas section dan memiliki fallback. Kandidat Pure SAC v2 menambahkan boundary retoris source-only tanpa contextual embedding; peningkatannya pada reasoning development kecil dan belum tervalidasi eksternal. |
-| Embedding dan index | DONE (Indo-Law) / PARTIAL (environment) | Enam index development dan dua index holdout dibangun ulang dengan `intfloat/multilingual-e5-small`; manifest menyimpan model, package, input/output hash, commit, dan platform. Lockfile final belum ada. |
-| Retrieval Fixed vs SAC | DONE (eksploratif Indo-Law) / NOT FINAL | Raw qrels, chunks, index, rankings, report, dan manifest berhasil direproduksi. Holdout sudah pernah dibuka, memakai gold XML section, dan tidak boleh disebut konfirmatori atau evaluasi PDF. |
-| Recall@K | DONE (evaluator dan rerun v2) | Schema aktif menghitung coverage `evidence_id` bersama dan mendeduplikasi overlapping chunk; seluruh development/holdout telah direrun. |
+| Fixed-size chunking | DONE | Implementasi word-window 150 kata dan overlap 30 kata tersedia, diuji unit, dan dijalankan pada corpus 200 dokumen. |
+| SAC | DONE | Implementasi 150/30 menjaga batas section, tidak membuat chunk lintas bagian, dan dijalankan pada corpus yang sama dengan fixed-size. |
+| Hybrid structure-summary | DONE (eksploratif) | Konteks dokumen dan konteks bagian hierarkis ditambahkan hanya pada input embedding; teks/offset bukti tetap verbatim. |
+| Embedding dan index | DONE (Indo-Law) / PARTIAL (environment) | Tiga indeks corpus tunggal dibangun dengan `intfloat/multilingual-e5-small`; manifest menyimpan model, hash, commit, dan platform. Lockfile final belum ada. |
+| Retrieval komparatif | DONE (eksploratif Indo-Law) / NOT EXTERNAL VALIDATION | Fixed, SAC, dan hybrid dijalankan pada satu indeks masing-masing yang mencakup 200 dokumen. Hasil memakai gold XML section dan tidak boleh disebut evaluasi PDF atau generalisasi data baru. |
+| Recall@K | DONE | Schema aktif menghitung coverage `evidence_id` bersama dan mendeduplikasi overlapping chunk; seluruh 800 kueri telah dievaluasi pada satu corpus. |
 | MRR@K | DONE (kode dan rerun eksploratif) | Reciprocal rank untuk item relevan pertama diuji termasuk rank K; hasil per-query dan agregat tersedia lokal. |
 | NDCG@K | DONE (kode dan rerun eksploratif) | Gain `2^rel-1`, diskon log2, ideal ranking, dan test manual lulus; hasil per-query dan agregat tersedia lokal. |
 | Hit@K removal | DONE untuk tree aktif | Tidak ada kecocokan `Hit@K`, `hit_at_k`, `hitk`, atau hit-rate di working tree aktif. Riwayat Git lama masih memuat Hit@K dan diperlakukan sebagai legacy, bukan pipeline aktif. |
-| Context budget fairness | PARTIAL | Input generator memakai anggaran kata identik dan tidak menambahkan label section ke prompt. Pemilihan budget development belum dilakukan dan audit token aktual belum ada. |
+| Context budget fairness | PARTIAL | Ketiga chunker memakai 150/30. Audit hybrid menunjukkan maksimum 379 token, P95 279, dan nol input melampaui batas 512; audit generasi jawaban belum dilakukan. |
 | Prompt generasi | PARTIAL | `legal_qa_id_v1` tersedia dan sama untuk kedua lengan; belum digunakan dalam eksperimen generasi nyata. |
 | Generasi jawaban | NOT STARTED | Tidak ada provider adapter/CLI aktif, model final, output jawaban, retry policy, seed, concurrency, atau failure log. |
 | Faithfulness | NOT STARTED | Belum diimplementasikan. |
@@ -241,7 +256,7 @@ offset sumber. Pada development, Recall@5 `pertimbangan_hukum` meningkat dari
 Kandidat ini berstatus post-hoc dan wajib divalidasi pada data baru; frozen v2
 dan hasil holdout lama tidak diubah.
 
-### Keputusan lanjutan: tetap Pure SAC
+### Keputusan lama: tetap Pure SAC (superseded)
 
 Untuk menjaga ruang lingkup skripsi, contextual candidate tidak dipilih sebagai
 desain utama. Pure SAC v2 kemudian diuji dengan batas window yang disejajarkan
@@ -258,6 +273,23 @@ final. Rancangan dan tabel lengkap ada di `experiments/pure_sac_v2_design.md`.
 Evaluasi menyeluruh seluruh cutoff, section, pasangan ukuran, interval bootstrap,
 dan overhead indeks ada di
 `experiments/fixed_vs_pure_sac_comprehensive_evaluation.md`.
+
+### Keputusan terbaru: hybrid hierarkis
+
+Pure SAC dipertahankan sebagai baseline, bukan lagi metode final. Eksperimen
+development membandingkan fixed, pure structure-aware, summary+fixed, satu
+fingerprint global+structure, fingerprint+role tag, dan konteks hierarkis.
+Desain hierarkis memisahkan identitas dokumen dari konteks bagian sehingga pasal
+pertimbangan tidak ditempelkan ke semua chunk amar/dakwaan.
+
+Pada development, `hybrid_hier_w150_o30_s0` mencapai Recall@5 0,6687, MRR@5
+0,4626, nDCG@5 0,4681, dan DRM@5 0,0062. Pada holdout eksploratif 160 dokumen,
+nilainya menjadi 0,6594, 0,4484, 0,4486, dan 0,0278. Audit token memastikan
+tidak ada input hybrid 150/30 yang melampaui 512 token pada development maupun
+holdout. Namun fixed tetap lebih tinggi pada Recall@5 pertimbangan hukum
+(0,7375 vs 0,6500), sedangkan pure structure-aware lebih tinggi pada amar dan
+dakwaan. Dengan demikian kontribusi yang didukung adalah perbaikan kualitas
+ranking agregat dan provenance dokumen, bukan keunggulan universal.
 
 ## Risiko validitas
 

@@ -1,0 +1,69 @@
+extends: default.yaml
+
+experiment:
+  status: single_corpus_exploratory_comparison
+  corpus_partitioning: none
+  collection: corpus
+  candidate_origin: prior_iterative_experiments_on_same_corpus
+  claim_scope: comparative_not_external_generalization
+
+chunking:
+  strategy: hierarchical_structure_summary_augmented
+  design_id: hybrid_hier_w150_o30_s0
+  max_words: 150
+  overlap_words: 30
+  overlap_sentences: 0
+  cross_section_chunks: false
+  source_text_preserved: true
+  output_path: data/chunks/indolaw_200/corpus/hybrid_hier_w150_o30_s0/chunks.jsonl
+
+augmentation:
+  document_context:
+    fields:
+      - case_number
+      - defendant
+      - case_topic
+    maximum_characters: 120
+  section_context:
+    source: rhetorical_section
+    maximum_characters: 120
+    fields_by_section:
+      identitas_terdakwa:
+        - defendant
+      riwayat_penahanan:
+        - defendant
+      riwayat_dakwaan:
+        - charge
+      pertimbangan_hukum:
+        - controlling_statute
+      amar_putusan:
+        - disposition
+  generator:
+    backend: deterministic_source_extraction
+    generative_llm: false
+    grounded_in_source: true
+
+embedding:
+  provider: sentence_transformers
+  model_name: intfloat/multilingual-e5-small
+  maximum_tokens: 512
+  query_prefix: "query: "
+  document_prefix: "passage: "
+  normalize_embeddings: true
+
+retrieval:
+  scope: full_corpus
+  top_k: 50
+  index_path: vector_db/indolaw_200/corpus/hybrid_hier_w150_o30_s0
+
+evaluation:
+  primary_cutoff: 5
+  metrics:
+    - evidence_recall
+    - mrr
+    - ndcg
+    - document_retrieval_mismatch
+  bootstrap:
+    unit: document
+    samples: 10000
+    seed: 42

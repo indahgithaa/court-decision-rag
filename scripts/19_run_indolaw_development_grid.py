@@ -1,4 +1,4 @@
-"""Build and retrieve one Indo-Law split with one loaded model."""
+"""Build and retrieve one Indo-Law corpus collection with one loaded model."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
+
+import numpy as np
 
 from src.embedding import SentenceTransformerEmbedder
 from src.retrieval import DenseVectorStore
@@ -32,10 +34,15 @@ CONFIGS = (
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Build indexes and top-k runs for one Indo-Law split."
+        description="Build indexes and top-k runs for one Indo-Law collection."
     )
     parser.add_argument(
-        "--split", choices=("development", "holdout"), default="development"
+        "--collection",
+        "--split",
+        dest="collection",
+        choices=("corpus", "development", "holdout"),
+        default="corpus",
+        help="Use 'corpus' for the unsplit thesis benchmark.",
     )
     parser.add_argument("--configs", nargs="+")
     parser.add_argument(
@@ -73,19 +80,29 @@ def main(argv: Sequence[str] | None = None) -> None:
         action="store_true",
         help="Reuse only complete, validated index/run pairs; never overwrite them.",
     )
+    parser.add_argument(
+        "--reuse-index-collections",
+        nargs="+",
+        choices=("development", "holdout"),
+        help=(
+            "Reuse document vectors from existing collections only after exact "
+            "chunk-ID and embedding-text validation. Queries are always rerun "
+            "against the combined collection."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.configs is None:
-        if args.split != "development":
-            raise ValueError("Holdout requires explicit frozen --configs")
+        if args.collection != "development":
+            raise ValueError("The unsplit corpus requires explicit --configs")
         args.configs = list(CONFIGS)
     args.questions = args.questions or Path(
-        f"data/evaluation/indolaw_200/{args.split}_questions.csv"
+        f"data/evaluation/indolaw_200/{args.collection}_questions.csv"
     )
     args.chunks_root = args.chunks_root or Path(
-        f"data/chunks/indolaw_200/{args.split}"
+        f"data/chunks/indolaw_200/{args.collection}"
     )
     args.indexes_root = args.indexes_root or Path(
-        f"vector_db/indolaw_200/{args.split}"
+        f"vector_db/indolaw_200/{args.collection}"
     )
     if args.batch_size <= 0 or args.top_k <= 0:
         raise ValueError("batch-size and top-k must be positive")
@@ -96,19 +113,22 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     questions = _read_approved_questions(args.questions)
     run_paths = {
-        name: args.runs_root / f"indolaw_200_{args.split}_{name}_top50.jsonl"
+        name: args.runs_root / f"indolaw_200_{args.collection}_{name}_top50.jsonl"
         for name in args.configs
     }
     index_paths = {name: args.indexes_root / name for name in args.configs}
     grid_manifest_path = args.manifest_output or (
-        args.runs_root / f"indolaw_200_{args.split}_grid_run_manifest.json"
+        args.runs_root / f"indolaw_200_{args.collection}_grid_run_manifest.json"
     )
     if grid_manifest_path.exists():
         raise FileExistsError(f"Refusing to overwrite {grid_manifest_path}")
     for name in args.configs:
         has_run = run_paths[name].exists()
         has_index = index_paths[name].exists() and any(index_paths[name].iterdir())
-        if has_run != has_index:
+        reusable_index_only = (
+            has_index and not has_run and args.reuse_index_collections
+        )
+        if has_run != has_index and not reusable_index_only:
             raise ValueError(
                 f"Incomplete artifact pair for {name}; index={has_index}, run={has_run}"
             )
@@ -161,25 +181,58 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
             print(f"{name}: reused validated index and run")
             continue
-        embeddings = embedder.embed_documents(
-            [str(chunk.get("embedding_text") or chunk["text"]) for chunk in chunks]
-        )
-        store = DenseVectorStore(chunks, embeddings, model_name=args.model)
-        store.save(
-            index_paths[name],
-            provenance={
-                "dataset": "indolaw_200",
-                "split": args.split,
-                "design": name,
-                "chunks_sha256": _sha256(chunks_path),
-                "batch_size": args.batch_size,
-                "query_prefix": "query: ",
-                "document_prefix": "passage: ",
-                "normalize_embeddings": True,
-                "embedding_text_field": "embedding_text_or_text",
-                "device": args.device,
-            },
-        )
+        if index_paths[name].exists() and any(index_paths[name].iterdir()):
+            store = DenseVectorStore.load(index_paths[name])
+            if store.model_name != args.model or store.chunks != chunks:
+                raise ValueError(f"Existing index mismatch for {name}")
+            reused_document_embeddings = True
+        elif args.reuse_index_collections:
+            store = _combine_validated_indexes(
+                design=name,
+                chunks=chunks,
+                model_name=args.model,
+                source_root=args.indexes_root.parent,
+                source_collections=args.reuse_index_collections,
+            )
+            store.save(
+                index_paths[name],
+                provenance={
+                    "dataset": "indolaw_200",
+                    "collection": args.collection,
+                    "design": name,
+                    "chunks_sha256": _sha256(chunks_path),
+                    "embedding_reuse": {
+                        "source_collections": args.reuse_index_collections,
+                        "validation": "exact_chunk_id_and_embedding_text_match",
+                    },
+                    "query_prefix": "query: ",
+                    "document_prefix": "passage: ",
+                    "normalize_embeddings": True,
+                    "embedding_text_field": "embedding_text_or_text",
+                },
+            )
+            reused_document_embeddings = True
+        else:
+            embeddings = embedder.embed_documents(
+                [str(chunk.get("embedding_text") or chunk["text"]) for chunk in chunks]
+            )
+            store = DenseVectorStore(chunks, embeddings, model_name=args.model)
+            store.save(
+                index_paths[name],
+                provenance={
+                    "dataset": "indolaw_200",
+                    "collection": args.collection,
+                    "design": name,
+                    "chunks_sha256": _sha256(chunks_path),
+                    "batch_size": args.batch_size,
+                    "query_prefix": "query: ",
+                    "document_prefix": "passage: ",
+                    "normalize_embeddings": True,
+                    "embedding_text_field": "embedding_text_or_text",
+                    "device": args.device,
+                },
+            )
+            reused_document_embeddings = False
 
         records: list[dict[str, Any]] = []
         for question, query_embedding in zip(questions, query_embeddings):
@@ -227,11 +280,17 @@ def main(argv: Sequence[str] | None = None) -> None:
                 reused_existing=False,
             )
         )
-        print(f"{name}: indexed {len(chunks)} chunks; retrieved {count} queries")
+        reuse_note = "reused validated vectors; " if reused_document_embeddings else ""
+        print(
+            f"{name}: {reuse_note}indexed {len(chunks)} chunks; "
+            f"retrieved {count} queries"
+        )
 
     git_commit, git_dirty = _git_state()
     manifest = {
-        "experiment_id": f"indolaw_200_{args.split}_grid_evidence_recall_v2",
+        "experiment_id": (
+            f"indolaw_200_{args.collection}_grid_evidence_recall_v2"
+        ),
         "metric_schema_version": "retrieval-v2-evidence-recall",
         "started_at_utc": started_at,
         "completed_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -249,7 +308,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         },
         "dataset_manifest": args.dataset_manifest.as_posix(),
         "dataset_manifest_sha256": _sha256(args.dataset_manifest),
-        "split": args.split,
+        "collection": args.collection,
         "questions": args.questions.as_posix(),
         "questions_sha256": _sha256(args.questions),
         "seed": args.seed,
@@ -259,6 +318,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "top_k": args.top_k,
         "retrieval_scope": "full_corpus",
         "resume_mode": args.resume,
+        "reused_index_collections": args.reuse_index_collections or [],
         "latency_method": "batched_query_embedding_amortized_plus_search",
         "query_embedding_batch_ms_this_process": query_embedding_batch_ms,
         "latency_use": "batched diagnostic only; not a final latency claim",
@@ -290,8 +350,50 @@ def _read_approved_questions(path: Path) -> list[dict[str, str]]:
     if not rows or any(
         row.get("review_status", "").strip().lower() != "approved" for row in rows
     ):
-        raise ValueError("All questions in the requested split must be approved")
+        raise ValueError("All questions in the requested collection must be approved")
     return rows
+
+
+def _combine_validated_indexes(
+    *,
+    design: str,
+    chunks: list[dict[str, Any]],
+    model_name: str,
+    source_root: Path,
+    source_collections: Sequence[str],
+) -> DenseVectorStore:
+    vectors: dict[str, np.ndarray] = {}
+    source_chunks: dict[str, dict[str, Any]] = {}
+    for collection in source_collections:
+        store = DenseVectorStore.load(source_root / collection / design)
+        if store.model_name != model_name:
+            raise ValueError(
+                f"Source index model mismatch for {collection}/{design}"
+            )
+        for row, vector in zip(store.chunks, store.embeddings):
+            chunk_id = str(row["chunk_id"])
+            if chunk_id in vectors:
+                raise ValueError(f"Duplicate source chunk ID: {chunk_id}")
+            source_chunks[chunk_id] = row
+            vectors[chunk_id] = vector
+
+    expected_ids = {str(row["chunk_id"]) for row in chunks}
+    if set(vectors) != expected_ids:
+        missing = sorted(expected_ids - set(vectors))
+        extra = sorted(set(vectors) - expected_ids)
+        raise ValueError(
+            f"Reusable index coverage mismatch for {design}: "
+            f"missing={missing[:5]}, extra={extra[:5]}"
+        )
+    for row in chunks:
+        chunk_id = str(row["chunk_id"])
+        current_text = str(row.get("embedding_text") or row["text"])
+        source = source_chunks[chunk_id]
+        source_text = str(source.get("embedding_text") or source["text"])
+        if current_text != source_text:
+            raise ValueError(f"Embedding text mismatch for chunk {chunk_id}")
+    matrix = np.vstack([vectors[str(row["chunk_id"])] for row in chunks])
+    return DenseVectorStore(chunks, matrix, model_name=model_name)
 
 
 def _sha256(path: Path) -> str:

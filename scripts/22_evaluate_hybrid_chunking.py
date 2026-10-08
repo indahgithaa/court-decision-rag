@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Sequence
@@ -36,7 +37,14 @@ DEFAULT_CONFIGS = (
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-id", default="indolaw_200")
-    parser.add_argument("--split", choices=("development", "holdout"), default="development")
+    parser.add_argument(
+        "--collection",
+        "--split",
+        dest="collection",
+        choices=("corpus", "development", "holdout"),
+        default="corpus",
+        help="Use 'corpus' for the unsplit thesis benchmark.",
+    )
     parser.add_argument("--configs", nargs="+", default=list(DEFAULT_CONFIGS))
     parser.add_argument(
         "--questions-root", type=Path, default=Path("data/evaluation/indolaw_200")
@@ -51,14 +59,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--evaluation-stage",
-        choices=("development", "corrected_exploratory_holdout", "final_holdout"),
-        default="development",
+        choices=(
+            "single_corpus_exploratory",
+            "development",
+            "corrected_exploratory_holdout",
+            "final_holdout",
+        ),
+        default="single_corpus_exploratory",
     )
     args = parser.parse_args(argv)
     if args.output_json.exists() or args.output_md.exists():
         raise FileExistsError("Refusing to overwrite a hybrid evaluation report")
 
-    question_path = args.questions_root / f"{args.split}_questions.csv"
+    question_path = args.questions_root / f"{args.collection}_questions.csv"
     with question_path.open("r", encoding="utf-8-sig", newline="") as file:
         questions = list(csv.DictReader(file))
     query_documents = {row["query_id"]: row["document_id"] for row in questions}
@@ -68,7 +81,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     shared_evidence: dict[str, set[str]] | None = None
     for design in args.configs:
         qrels, evidence_qrels = _read_qrels(
-            args.questions_root / f"{args.split}_{design}_qrels.csv"
+            args.questions_root / f"{args.collection}_{design}_qrels.csv"
         )
         current_evidence = {
             query_id: set(values) for query_id, values in evidence_qrels.items()
@@ -79,7 +92,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             raise ValueError(f"Evidence units differ for {design}")
 
         run_path = args.runs_root / (
-            f"{args.dataset_id}_{args.split}_{design}_top50.jsonl"
+            f"{args.dataset_id}_{args.collection}_{design}_top50.jsonl"
         )
         records = list(read_jsonl(run_path))
         rankings = {
@@ -118,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             document_rankings,
             ks=(1, 3, 5, 10, 50),
         )
-        chunk_path = args.chunks_root / args.split / design / "chunks.jsonl"
+        chunk_path = args.chunks_root / args.collection / design / "chunks.jsonl"
         evaluations[design] = {
             "family": _family(design),
             "chunk_count": sum(1 for _ in read_jsonl(chunk_path)),
@@ -146,7 +159,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     }
     result = {
         "dataset": args.dataset_id,
-        "split": args.split,
+        "collection": args.collection,
         "evaluation_stage": args.evaluation_stage,
         "metric_schema_version": "retrieval-v2-evidence-recall+drm",
         "query_count": len(questions),
@@ -167,7 +180,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         encoding="utf-8",
     )
     args.output_md.write_text(markdown, encoding="utf-8")
-    print(markdown)
+    console_encoding = sys.stdout.encoding or "utf-8"
+    print(
+        markdown.encode(console_encoding, errors="replace").decode(console_encoding)
+    )
 
 
 def _family(design: str) -> str:
@@ -280,7 +296,7 @@ def _read_qrels(
 
 def render_markdown(result: dict[str, Any]) -> str:
     lines = [
-        f"# Evaluasi hybrid chunking — {result['split']}",
+        f"# Evaluasi hybrid chunking — {result['collection']}",
         "",
         f"Dokumen: {result['document_count']}; pertanyaan: {result['query_count']}.",
         "",
@@ -348,6 +364,15 @@ def render_markdown(result: dict[str, Any]) -> str:
             [
                 "Holdout ini pernah dibuka pada eksperimen sebelumnya; hasil bukan "
                 "konfirmasi blind.",
+                "",
+            ]
+        )
+    elif result["evaluation_stage"] == "single_corpus_exploratory":
+        lines.extend(
+            [
+                "Seluruh metode dievaluasi pada satu corpus. Karena desain telah "
+                "dikembangkan dengan corpus ini, hasil bersifat komparatif "
+                "eksploratif dan bukan estimasi generalisasi pada data baru.",
                 "",
             ]
         )

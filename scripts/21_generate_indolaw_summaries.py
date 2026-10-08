@@ -31,7 +31,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         default=Path("data/processed/indolaw_200/document_summaries"),
     )
     parser.add_argument(
-        "--splits", nargs="+", choices=("development", "holdout"), default=("development",)
+        "--collections",
+        "--splits",
+        dest="collections",
+        nargs="+",
+        choices=("corpus", "development", "holdout"),
+        default=("corpus",),
+        help="Corpus collection(s); 'corpus' is the unsplit thesis benchmark.",
     )
     parser.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     parser.add_argument(
@@ -65,11 +71,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.backend == "qwen"
         else None
     )
-    for split in args.splits:
-        output = args.output_root / f"{split}.jsonl"
+    for collection in args.collections:
+        output = args.output_root / f"{collection}.jsonl"
         if output.exists():
             raise FileExistsError(f"Refusing to overwrite {output}")
-        sections = list(read_jsonl(args.processed_root / split / "sections.jsonl"))
+        sections = list(
+            read_jsonl(args.processed_root / collection / "sections.jsonl")
+        )
         by_document: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for section in sections:
             by_document[str(section["document_id"])].append(section)
@@ -107,7 +115,9 @@ def main(argv: Sequence[str] | None = None) -> None:
                     **metadata,
                 }
             )
-            print(f"{split}: {index}/{len(document_ids)} {document_id}: {summary}")
+            print(
+                f"{collection}: {index}/{len(document_ids)} {document_id}: {summary}"
+            )
         count = write_jsonl(output, records)
         manifest = {
             "method": "Summary-Augmented Chunking document fingerprint",
@@ -120,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "paper used GPT-4o-mini over each document."
             ),
             "backend": args.backend,
-            "split": split,
+            "collection": collection,
             "document_count": count,
             "model_name": args.model,
             "target_chars": args.target_chars,
