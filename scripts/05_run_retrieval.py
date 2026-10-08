@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import time
 from pathlib import Path
 from typing import Sequence
@@ -40,6 +41,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     embedding = config.get("embedding", {})
     retrieval = config.get("retrieval", {})
     index_path = args.index or _project_path(args.config, str(retrieval["index_path"]))
+    embedding_method = str(embedding.get("method", "independent"))
+    _validate_index_method(index_path, embedding_method)
     with args.questions.open("r", encoding="utf-8-sig", newline="") as file:
         questions = list(csv.DictReader(file))
     _require_approved(questions)
@@ -52,6 +55,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         query_prefix=str(embedding.get("query_prefix", "query: ")),
         document_prefix=str(embedding.get("document_prefix", "passage: ")),
         normalize_embeddings=bool(embedding.get("normalize_embeddings", True)),
+        trust_remote_code=bool(embedding.get("trust_remote_code", False)),
+        max_sequence_length=_optional_int(embedding.get("max_sequence_length")),
     )
     retriever = DenseRetriever(embedder, store)
     k = args.k or int(retrieval.get("top_k", 10))
@@ -76,6 +81,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "document_id": question["document_id"],
                 "target_section_label": question["target_section_label"],
                 "strategy": str(store.chunks[0].get("strategy", "")),
+                "embedding_method": embedding_method,
                 "model_name": store.model_name,
                 "retrieval_scope": (
                     "gold_document_oracle"
@@ -119,6 +125,29 @@ def _require_approved(questions: Sequence[dict[str, str]]) -> None:
 def _project_path(config_path: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else config_path.resolve().parent.parent / path
+
+
+def _optional_int(value: object) -> int | None:
+    return None if value is None else int(value)
+
+
+def _validate_index_method(index_path: Path, expected_method: str) -> None:
+    manifest = json.loads(
+        (index_path / "manifest.json").read_text(encoding="utf-8")
+    )
+    actual_method = manifest.get("provenance", {}).get("embedding_method")
+    if actual_method is None:
+        if expected_method != "independent":
+            raise ValueError(
+                "A contextual run requires an index manifest with "
+                "embedding_method=contextual"
+            )
+        return
+    if str(actual_method) != expected_method:
+        raise ValueError(
+            f"Index embedding method {actual_method!r} does not match "
+            f"configuration {expected_method!r}"
+        )
 
 
 if __name__ == "__main__":

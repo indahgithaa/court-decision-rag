@@ -1,19 +1,27 @@
-# Court Decision RAG — Hybrid Structure- and Summary-Augmented Chunking
+# Court Decision RAG — SAC with Contextualized Chunk Embeddings
 
 Pipeline penelitian retrieval dan legal QA putusan pengadilan Indonesia.
-Eksperimen terbaru menggabungkan structure-aware chunking, document
-fingerprint, dan konteks bagian retoris secara hierarkis.
+Eksperimen aktif mempertahankan batas Structure-Aware Chunking (SAC) dan
+menguji contextualized chunk embeddings terhadap embedding chunk independen.
 
 ## Status penelitian
 
+- Desain aktif membandingkan `SAC-Independent` dan `SAC-Contextual` memakai
+  chunk SAC, encoder, query, dan retrieval yang identik. Perlakuan membentuk
+  embedding chunk dengan pooling token yang telah melihat konteks macro-window
+  dokumen; detail dan perintah reproduksi ada di
+  `experiments/sac_contextualized_embeddings_design.md`.
+- Implementasi dan evaluator berpasangan sudah tersedia, tetapi indeks dan
+  hasil numerik contextual E5 belum dihasilkan. Jangan mengklaim metode
+  kontekstual lebih baik sebelum eksperimen selesai.
 - Evaluator retrieval aktif memakai schema
   `retrieval-v2-evidence-recall`: Recall@K dihitung pada evidence unit yang sama
   untuk kedua strategi; MRR@K dan nDCG@K dihitung pada ranking chunk.
 - Reproduksi Indo-Law 200 selesai secara lokal, tetapi memakai XML dengan gold
   section. Hasilnya adalah oracle-structure robustness experiment.
-- Desain skripsi aktif tidak membagi corpus menjadi development/holdout.
-  Fixed-size, structure-aware, dan hybrid dibandingkan pada satu corpus yang
-  sama: 200 dokumen dan 800 pertanyaan. Karena desain dikembangkan dengan
+- Evaluasi sebelumnya tidak membagi corpus menjadi development/holdout.
+  Fixed-size, structure-aware, dan hybrid telah dibandingkan pada satu corpus
+  yang sama: 200 dokumen dan 800 pertanyaan. Karena desain dikembangkan dengan
   corpus tersebut, hasilnya bersifat komparatif eksploratif.
 - Pada corpus tunggal, `hybrid_hier_w150_o30_s0` mencapai Recall@5 0,6613,
   MRR@5 0,4510, nDCG@5 0,4522, dan DRM@5 0,0262. Hybrid memperbaiki ranking

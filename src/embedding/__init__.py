@@ -1,9 +1,15 @@
-"""Embedding interfaces reserved for a later milestone."""
+"""Embedding interfaces for independent and contextual chunk representations."""
 
-from .embedder import Embedder
+from .embedder import (
+    ContextualSentenceTransformerEmbedder,
+    Embedder,
+    FloatMatrix,
+    SentenceTransformerEmbedder,
+)
 
-__all__ = ["Embedder"]
-
-from .embedder import Embedder, FloatMatrix, SentenceTransformerEmbedder
-
-__all__ = ["Embedder", "FloatMatrix", "SentenceTransformerEmbedder"]
+__all__ = [
+    "ContextualSentenceTransformerEmbedder",
+    "Embedder",
+    "FloatMatrix",
+    "SentenceTransformerEmbedder",
+]

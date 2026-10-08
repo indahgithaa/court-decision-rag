@@ -1,0 +1,17 @@
+extends: indolaw_sac_independent.yaml
+
+# Treatment: reuse the exact SAC chunks above, encode their source documents,
+# then mean-pool contextual token embeddings over each chunk's source span.
+experiment:
+  design_id: sac_w150_o30_contextual_e5
+  status: single_corpus_exploratory
+
+embedding:
+  method: contextual
+  batch_size: 4
+  documents_path: data/processed/indolaw_200/corpus/pages.jsonl
+  context_window_tokens: 512
+  context_window_overlap_tokens: 128
+
+retrieval:
+  index_path: vector_db/indolaw_200/corpus/sac_w150_o30_contextual_e5
