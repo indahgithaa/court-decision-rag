@@ -174,3 +174,40 @@ def test_contextual_embedder_rejects_offset_text_mismatch() -> None:
             ],
             {"d1": "aa bb"},
         )
+
+
+def test_chunk_groups_keep_strategy_specific_window_assignment() -> None:
+    embedder = ContextualSentenceTransformerEmbedder(
+        "fake",
+        context_window_tokens=8,
+        context_window_overlap_tokens=2,
+        document_prefix="",
+    )
+    embedder._model = _FakeModel()
+    document = "aa bb cc dd ee ff gg hh ii jj"
+    fixed = [
+        {
+            "chunk_id": "fixed",
+            "document_id": "d1",
+            "start_position": 12,
+            "end_position": 17,
+            "text": "ee ff",
+        }
+    ]
+    sac = [
+        {
+            "chunk_id": "sac-crossing",
+            "document_id": "d1",
+            "start_position": 9,
+            "end_position": 20,
+            "text": "dd ee ff gg",
+        }
+    ]
+
+    fixed_alone = embedder.embed_document_chunks(document, fixed)
+    grouped = embedder.embed_document_chunk_groups(
+        document, {"fixed": fixed, "sac": sac}
+    )
+
+    np.testing.assert_allclose(grouped["fixed"], fixed_alone)
+    assert grouped["sac"].shape == (1, 2)

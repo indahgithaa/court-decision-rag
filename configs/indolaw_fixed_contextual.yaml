@@ -1,0 +1,17 @@
+extends: indolaw_fixed_independent.yaml
+
+# Treatment: retain the exact fixed-size boundaries, contextualize the source
+# document in overlapping windows, then pool each chunk's token span.
+experiment:
+  design_id: fixed_w150_o30_contextual_e5
+  status: single_corpus_exploratory
+
+embedding:
+  method: contextual
+  batch_size: 8
+  documents_path: data/processed/indolaw_200/corpus/pages.jsonl
+  context_window_tokens: 512
+  context_window_overlap_tokens: 128
+
+retrieval:
+  index_path: vector_db/indolaw_200/corpus/fixed_w150_o30_contextual_e5

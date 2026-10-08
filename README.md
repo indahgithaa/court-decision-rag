@@ -6,14 +6,16 @@ menguji contextualized chunk embeddings terhadap embedding chunk independen.
 
 ## Status penelitian
 
-- Desain aktif membandingkan `SAC-Independent` dan `SAC-Contextual` memakai
-  chunk SAC, encoder, query, dan retrieval yang identik. Perlakuan membentuk
-  embedding chunk dengan pooling token yang telah melihat konteks macro-window
-  dokumen; detail dan perintah reproduksi ada di
+- Desain aktif adalah faktorial 2 x 2: `Fixed`/`SAC` dikombinasikan dengan
+  embedding `Independent`/`Contextual`. Encoder, query, retrieval scope, dan
+  konfigurasi chunking yang dibandingkan dibekukan; detail reproduksi ada di
   `experiments/sac_contextualized_embeddings_design.md`.
-- Implementasi dan evaluator berpasangan sudah tersedia, tetapi indeks dan
-  hasil numerik contextual E5 belum dihasilkan. Jangan mengklaim metode
-  kontekstual lebih baik sebelum eksperimen selesai.
+- Eksperimen retrieval 800 pertanyaan telah selesai. Dengan
+  `intfloat/multilingual-e5-small`, contextualized chunk embeddings yang diuji
+  menurunkan Recall@5 sekitar 0,24 pada Fixed maupun SAC. Hasil ini tidak
+  mendukung klaim bahwa perlakuan contextual tersebut meningkatkan retrieval;
+  angka, interval bootstrap, dan analisis per bagian ada di
+  `experiments/factorial_contextual_retrieval_results.md`.
 - Evaluator retrieval aktif memakai schema
   `retrieval-v2-evidence-recall`: Recall@K dihitung pada evidence unit yang sama
   untuk kedua strategi; MRR@K dan nDCG@K dihitung pada ranking chunk.

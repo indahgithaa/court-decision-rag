@@ -9,6 +9,10 @@ from src.evaluation.contextual_embedding_report import (
     evaluate_contextual_embedding_runs,
     render_contextual_embedding_markdown,
 )
+from src.evaluation.factorial_retrieval_report import (
+    evaluate_factorial_retrieval,
+    render_factorial_retrieval_markdown,
+)
 from src.evaluation.ground_truth import (
     build_qrel_candidates,
     join_clean_pages,
@@ -46,6 +50,7 @@ __all__ = [
     "evidence_recall_at_k",
     "evaluate_document_retrieval",
     "evaluate_contextual_embedding_runs",
+    "evaluate_factorial_retrieval",
     "evaluate_retrieval",
     "evaluate_paired_runs",
     "paired_cluster_bootstrap_interval",
@@ -58,6 +63,7 @@ __all__ = [
     "reciprocal_rank_at_k",
     "render_error_markdown",
     "render_contextual_embedding_markdown",
+    "render_factorial_retrieval_markdown",
     "render_markdown",
     "render_structure_score",
     "render_sac_compliance",

@@ -1,0 +1,27 @@
+extends: default.yaml
+
+# Factorial control: conventional fixed-size chunks embedded independently.
+experiment:
+  design_id: fixed_w150_o30_independent_e5
+  status: single_corpus_exploratory
+
+paths:
+  processed_pages: data/processed/indolaw_200/corpus/pages.jsonl
+
+chunking:
+  strategy: fixed_size
+  max_words: 150
+  overlap_words: 30
+  output_path: data/chunks/indolaw_200/corpus/fixed_w150_o30/chunks.jsonl
+
+embedding:
+  method: independent
+  model_name: intfloat/multilingual-e5-small
+  document_prefix: "passage: "
+  query_prefix: "query: "
+  trust_remote_code: false
+  max_sequence_length: 512
+
+retrieval:
+  index_path: vector_db/indolaw_200/corpus/fixed_w150_o30
+  top_k: 50

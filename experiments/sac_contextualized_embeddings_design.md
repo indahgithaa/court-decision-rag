@@ -8,30 +8,38 @@ Judul kerja:
 
 ## Keputusan metode
 
-Structure-Aware Chunking (SAC) tetap dipakai untuk menentukan batas chunk.
-Kontribusi yang diuji adalah **cara representasi chunk**, bukan perubahan batas
-chunk atau penambahan hierarchical retrieval.
+Eksperimen memakai desain faktorial 2×2 agar efek chunking dan contextualized
+embedding tidak tercampur:
 
-- **Kontrol — SAC-Independent:** setiap teks chunk SAC di-encode secara terpisah.
-- **Perlakuan — SAC-Contextual:** dokumen sumber di-encode dalam contextual
-  window, lalu embedding setiap chunk diperoleh dengan mean pooling token yang
-  beririsan dengan offset chunk tersebut.
+| | Independent/early chunking | Contextual/windowed late chunking |
+|---|---|---|
+| Fixed-size 150/30 | Fixed-Independent | Fixed-Contextual |
+| SAC 150/30 | SAC-Independent | SAC-Contextual |
+
+Fixed-Independent adalah baseline konvensional, SAC-Independent adalah ablation
+chunking, Fixed-Contextual mengisolasi manfaat contextualization pada batas
+fixed, dan SAC-Contextual adalah metode gabungan yang diusulkan. Tidak ada
+hierarchical retrieval dalam eksperimen ini.
 
 Pendekatan perlakuan ini adalah contextualized chunk embedding bergaya *late
-chunking*. Teks, ID, urutan, dan offset seluruh chunk identik pada kedua kondisi.
-Query juga memakai encoder dan konfigurasi yang sama. Karena itu selisih hasil
-dapat dikaitkan lebih bersih dengan contextualization pada embedding chunk.
+chunking*. Di dalam setiap family, teks, ID, urutan, dan offset chunk identik
+antara kondisi Independent dan Contextual. Query juga memakai encoder dan
+konfigurasi yang sama. Perbandingan adalah pipeline early-chunk embedding
+konvensional melawan windowed late-chunk pooling; bukan klaim bahwa satu-satunya
+operasi numerik yang berubah hanyalah penambahan token konteks.
 
 ## Pertanyaan penelitian
 
-> Apakah contextualized chunk embeddings meningkatkan kinerja retrieval RAG
-> dibanding independent chunk embeddings ketika keduanya menggunakan batas
-> Structure-Aware Chunking yang identik pada putusan pengadilan Indonesia?
+1. Apakah contextualized chunk embeddings meningkatkan retrieval pada batas
+   Fixed-size dan SAC?
+2. Apakah SAC meningkatkan retrieval pada embedding Independent dan Contextual?
+3. Apakah terdapat interaksi antara strategi chunking dan contextualization?
 
-Hipotesis utama dinilai pada Recall@5, MRR@5, dan nDCG@5. Analisis per bagian
-retoris tetap dilaporkan karena manfaat konteks kemungkinan tidak seragam.
-DRM@5 dipakai sebagai diagnosis apakah konteks membantu menjaga provenance
-dokumen. Tidak ada asumsi bahwa metode harus unggul pada setiap metrik atau
+Metrik primer adalah evidence Recall@5. MRR@5 dan nDCG@5 adalah metrik ranking
+sekunder. Analisis per bagian retoris tetap dilaporkan karena manfaat konteks
+kemungkinan tidak seragam. DRM@5 dipakai sebagai diagnosis provenance dokumen.
+Seluruh kontras memakai paired document-cluster bootstrap 10.000 sampel dan
+win/tie/loss. Tidak ada asumsi bahwa metode harus unggul pada setiap metrik atau
 setiap bagian.
 
 ## Konfigurasi yang dibekukan
@@ -39,11 +47,11 @@ setiap bagian.
 | Komponen | Nilai |
 |---|---|
 | Corpus | Indo-Law 200, collection `corpus` |
-| Chunking | SAC, maksimum 150 kata, overlap 30 kata |
+| Chunking | Fixed-size dan SAC, maksimum 150 kata, overlap 30 kata |
 | Encoder | `intfloat/multilingual-e5-small` |
 | Context window perlakuan | 512 token, overlap 128 token |
 | Retrieval | exact cosine, corpus-wide, top-50 |
-| Bootstrap | paired cluster bootstrap, unit dokumen, seed 42 |
+| Bootstrap | 10.000 paired cluster bootstrap, unit dokumen, seed 42 |
 
 Jendela 512 token mengikuti kapasitas encoder multilingual yang telah dipakai
 pada eksperimen sebelumnya. Dokumen yang lebih panjang dibagi menjadi
@@ -51,6 +59,13 @@ macro-window yang saling overlap. Setiap chunk ditempatkan pada window yang
 memuat seluruh rentang tokennya dan memberikan konteks kiri-kanan paling
 seimbang. Pilihan ini menjaga perubahan eksperimen hanya pada waktu pooling,
 bukan sekaligus mengganti encoder.
+
+Evaluasi jawaban yang direncanakan memakai Faithfulness, Answer Relevance, dan
+BERTScore-F1 pada keempat arm dengan generator, prompt, decoding, context budget,
+judge LLM, dan judge embedding yang identik. Tahap ini baru boleh dijalankan
+setelah model generator/judge serta kredensial atau compute dibekukan; model
+lokal 0,5B tidak dipakai sebagai pengganti karena tidak memadai untuk klaim
+evaluasi legal QA final.
 
 ## Validasi implementasi
 
@@ -63,29 +78,29 @@ Indexer contextual menolak data jika:
 - satu chunk melebihi kapasitas contextual window; atau
 - ada chunk yang tidak berhasil dipool.
 
-Validasi terhadap artefak corpus saat implementasi menemukan 200 dokumen,
-12.206 chunk SAC, dan 0 ketidakcocokan offset-teks.
+Validasi terhadap artefak corpus menemukan 200 dokumen, 11.605 chunk Fixed,
+12.206 chunk SAC, dan 0 ketidakcocokan offset-teks pada kedua family. Penentuan
+window dilakukan terpisah per family; window identik hanya dideduplikasi pada
+forward pass sehingga batas satu strategi tidak mengubah embedding strategi
+lain.
 
 ## Menjalankan eksperimen
 
 ```powershell
-# 1. Indeks SAC independen yang lama dipakai sebagai kontrol tervalidasi.
-# Bangun hanya indeks contextual dari chunk SAC yang sama.
-.\.venv\Scripts\python.exe scripts\04_build_index.py `
-  --config configs\indolaw_sac_contextual.yaml
+# 1. Bangun kedua indeks contextual dengan encoding window yang dideduplikasi.
+.\.venv\Scripts\python.exe scripts\24_build_factorial_contextual_indexes.py `
+  --offline --device cpu
 
-# 2. Jalankan retrieval contextual dengan query dan top-k yang sama.
-.\.venv\Scripts\python.exe scripts\05_run_retrieval.py `
-  --config configs\indolaw_sac_contextual.yaml `
-  --questions data\evaluation\indolaw_200\corpus_questions.csv `
-  --output experiments\results\sac_contextual_e5_top50.jsonl
+# 2. Embed seluruh query sekali lalu cari pada kedua indeks contextual.
+.\.venv\Scripts\python.exe scripts\26_run_factorial_contextual_retrieval.py `
+  --offline --device cpu
 
-# 3. Hitung metrik, hasil per bagian, dan interval bootstrap berpasangan.
-.\.venv\Scripts\python.exe scripts\23_evaluate_contextual_embeddings.py `
-  --independent-run experiments\results\indolaw_200_corpus_sac_w150_o30_s0_top50.jsonl `
-  --contextual-run experiments\results\sac_contextual_e5_top50.jsonl `
-  --output-json experiments\results\sac_contextual_embedding_evaluation.json `
-  --output-md experiments\results\sac_contextual_embedding_evaluation.md
+# 3. Evaluasi keempat arm dan seluruh kontras faktorial yang dibekukan.
+.\.venv\Scripts\python.exe scripts\25_evaluate_factorial_contextual_embeddings.py `
+  --fixed-contextual-run experiments\results\indolaw_200_corpus_fixed_w150_o30_contextual_e5_top50.jsonl `
+  --sac-contextual-run experiments\results\indolaw_200_corpus_sac_w150_o30_contextual_e5_top50.jsonl `
+  --output-json experiments\results\indolaw_200_factorial_contextual_evaluation.json `
+  --output-md experiments\results\indolaw_200_factorial_contextual_evaluation.md
 ```
 
 Model E5 sudah tersedia di environment reproduksi lokal. Index contextual tetap
@@ -95,8 +110,10 @@ dokumen, bukan secara terpisah pada chunk pendek.
 ## Batas klaim
 
 Corpus ini telah digunakan selama pengembangan metode, sehingga hasilnya adalah
-perbandingan eksploratif pada satu corpus. Jika konfigurasi atau ukuran window
-dipilih setelah melihat hasil, pilihan tersebut harus dicatat sebagai tuning.
+perbandingan eksploratif pada satu corpus. Fixed 150/30 adalah matched control
+faktorial, bukan konfigurasi Fixed terbaik dari eksperimen lama. nDCG memakai
+qrels chunk-specific sehingga kontras lintas Fixed–SAC harus dibaca bersama
+evidence Recall; jumlah chunk relevan dapat berbeda karena batas dan overlap.
 Klaim generalisasi memerlukan evaluasi eksternal yang belum dipakai untuk
 pengembangan.
 

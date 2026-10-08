@@ -149,7 +149,7 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
 
         vectors: list[FloatMatrix | None] = [None] * len(chunks)
         for document_id, indexed_chunks in grouped.items():
-            document_vectors = self._embed_document_chunks(
+            document_vectors = self.embed_document_chunks(
                 str(documents[document_id]),
                 [chunk for _, chunk in indexed_chunks],
             )
@@ -160,18 +160,54 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
             raise RuntimeError(
                 "Contextual embedding did not produce every chunk vector"
             )
-        matrix = np.asarray(vectors, dtype=np.float32)
+        return np.asarray(vectors, dtype=np.float32)
+
+    def embed_document_chunks(
+        self,
+        document_text: str,
+        chunks: Sequence[Mapping[str, Any]],
+    ) -> FloatMatrix:
+        """Embed one document's chunks, preserving the supplied chunk order."""
+        return self.embed_document_chunk_groups(
+            document_text, {"chunks": chunks}
+        )["chunks"]
+
+    def embed_document_chunk_groups(
+        self,
+        document_text: str,
+        chunk_groups: Mapping[str, Sequence[Mapping[str, Any]]],
+    ) -> dict[str, FloatMatrix]:
+        """Embed several boundary strategies with independent window assignment.
+
+        Each strategy computes its own contextual windows and chunk-to-window
+        assignments. Identical assigned windows are encoded once across groups,
+        which saves compute without allowing one strategy's boundaries to alter
+        another strategy's contextual representation.
+        """
+        matrices = self._embed_document_chunk_groups(document_text, chunk_groups)
         if self.normalize_embeddings:
-            matrix = _normalize_rows(matrix)
-        return matrix
+            return {name: _normalize_rows(matrix) for name, matrix in matrices.items()}
+        return matrices
 
     def _embed_document_chunks(
         self,
         document_text: str,
         chunks: Sequence[Mapping[str, Any]],
     ) -> FloatMatrix:
+        """Backward-compatible raw single-group embedding helper."""
+        return self._embed_document_chunk_groups(
+            document_text, {"chunks": chunks}
+        )["chunks"]
+
+    def _embed_document_chunk_groups(
+        self,
+        document_text: str,
+        chunk_groups: Mapping[str, Sequence[Mapping[str, Any]]],
+    ) -> dict[str, FloatMatrix]:
         if not document_text:
             raise ValueError("source document text must not be empty")
+        if not chunk_groups or any(not chunks for chunks in chunk_groups.values()):
+            raise ValueError("chunk_groups must contain non-empty chunk sequences")
         model = self._load_model()
         transformer = model[0]  # type: ignore[index]
         tokenizer = transformer.tokenizer
@@ -200,22 +236,6 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
         if not token_ids:
             raise ValueError("source document produced no tokens")
 
-        character_spans: list[tuple[int, int]] = []
-        spans: list[tuple[int, int]] = []
-        for chunk in chunks:
-            start = int(chunk.get("start_position", -1))
-            end = int(chunk.get("end_position", -1))
-            text = str(chunk.get("text", ""))
-            if start < 0 or end <= start or end > len(document_text):
-                raise ValueError(f"Invalid chunk offsets {start}:{end}")
-            if document_text[start:end] != text:
-                raise ValueError(
-                    "Chunk text does not match its source offsets; contextual "
-                    f"pooling is unsafe at {start}:{end}"
-                )
-            character_spans.append((start, end))
-            spans.append(_character_span_to_token_span(offsets, start, end))
-
         special_tokens = int(tokenizer.num_special_tokens_to_add(pair=False))
         prefix_tokens = (
             len(
@@ -232,30 +252,57 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
         configured_limit = self.context_window_tokens or int(
             model.max_seq_length  # type: ignore[attr-defined]
         )
-        capacity = configured_limit - special_tokens - prefix_tokens
+        available_tokens = configured_limit - special_tokens - prefix_tokens
+        # Retokenizing a character-sliced window can create a few extra
+        # boundary subwords compared with slicing the full-document token IDs.
+        # Reserve a small margin instead of silently truncating source tokens.
+        boundary_margin = min(8, max(0, available_tokens // 16))
+        capacity = available_tokens - boundary_margin
         if capacity <= 0:
             raise ValueError("context window leaves no room for document tokens")
-        windows = _context_windows(
-            len(token_ids),
-            capacity=capacity,
-            overlap=self.context_window_overlap_tokens,
-            required_spans=spans,
-        )
-        assignments = _assign_spans_to_windows(spans, windows)
-        chunks_by_window: dict[int, list[int]] = defaultdict(list)
-        for chunk_index, window_index in enumerate(assignments):
-            chunks_by_window[window_index].append(chunk_index)
+
+        group_states: dict[str, dict[str, Any]] = {}
+        all_active_windows: set[tuple[int, int]] = set()
+        for group_name, chunks in chunk_groups.items():
+            character_spans: list[tuple[int, int]] = []
+            spans: list[tuple[int, int]] = []
+            for chunk in chunks:
+                start = int(chunk.get("start_position", -1))
+                end = int(chunk.get("end_position", -1))
+                text = str(chunk.get("text", ""))
+                if start < 0 or end <= start or end > len(document_text):
+                    raise ValueError(f"Invalid chunk offsets {start}:{end}")
+                if document_text[start:end] != text:
+                    raise ValueError(
+                        "Chunk text does not match its source offsets; contextual "
+                        f"pooling is unsafe at {start}:{end}"
+                    )
+                character_spans.append((start, end))
+                spans.append(_character_span_to_token_span(offsets, start, end))
+            windows = _context_windows(
+                len(token_ids),
+                capacity=capacity,
+                overlap=self.context_window_overlap_tokens,
+                required_spans=spans,
+            )
+            assignments = _assign_spans_to_windows(spans, windows)
+            chunks_by_window: dict[tuple[int, int], list[int]] = defaultdict(list)
+            for chunk_index, window_index in enumerate(assignments):
+                chunks_by_window[windows[window_index]].append(chunk_index)
+            all_active_windows.update(chunks_by_window)
+            group_states[group_name] = {
+                "character_spans": character_spans,
+                "chunks_by_window": chunks_by_window,
+                "output_vectors": [None] * len(chunks),
+            }
 
         try:
             import torch
         except ImportError as error:
             raise RuntimeError("Contextual embeddings require PyTorch") from error
 
-        output_vectors: list[FloatMatrix | None] = [None] * len(chunks)
         model_device = getattr(model, "device", self.device or "cpu")
-        active_windows = [
-            (index, *windows[index]) for index in sorted(chunks_by_window)
-        ]
+        active_windows = sorted(all_active_windows)
         with torch.no_grad():
             for batch_start in range(0, len(active_windows), self.batch_size):
                 window_batch = active_windows[
@@ -263,7 +310,7 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
                 ]
                 character_windows = [
                     (offsets[window_start][0], offsets[window_end - 1][1])
-                    for _, window_start, window_end in window_batch
+                    for window_start, window_end in window_batch
                 ]
                 prepared = tokenizer(
                     [
@@ -278,44 +325,61 @@ class ContextualSentenceTransformerEmbedder(SentenceTransformerEmbedder):
                     return_offsets_mapping=True,
                     return_tensors="pt",
                 )
+                if int(prepared["input_ids"].shape[1]) > configured_limit:
+                    raise RuntimeError(
+                        "Retokenized contextual window exceeds the configured "
+                        "sequence length; increase the boundary margin"
+                    )
                 batch_offsets = prepared.pop("offset_mapping").tolist()
                 features = {
                     key: value.to(model_device)
                     for key, value in prepared.items()
                 }
                 encoded = transformer(features)
-                for batch_index, (window_index, _, _) in enumerate(window_batch):
+                for batch_index, window in enumerate(window_batch):
                     prepared_offsets = [
                         tuple(value) for value in batch_offsets[batch_index]
                     ]
                     window_character_start, _ = character_windows[batch_index]
                     token_embeddings = encoded["token_embeddings"][batch_index]
-                    for chunk_index in chunks_by_window[window_index]:
-                        character_start, character_end = character_spans[chunk_index]
-                        local_character_start = (
-                            len(self.document_prefix)
-                            + character_start
-                            - window_character_start
-                        )
-                        local_character_end = (
-                            len(self.document_prefix)
-                            + character_end
-                            - window_character_start
-                        )
-                        local_start, local_end = _character_span_to_token_span(
-                            prepared_offsets,
-                            local_character_start,
-                            local_character_end,
-                        )
-                        pooled = token_embeddings[local_start:local_end].mean(dim=0)
-                        pooled = _apply_post_pooling_modules(model, pooled)
-                        output_vectors[chunk_index] = np.asarray(
-                            pooled.detach().cpu().numpy(), dtype=np.float32
-                        )
+                    for state in group_states.values():
+                        chunks_by_window = state["chunks_by_window"]
+                        for chunk_index in chunks_by_window.get(window, ()):
+                            character_start, character_end = state[
+                                "character_spans"
+                            ][chunk_index]
+                            local_character_start = (
+                                len(self.document_prefix)
+                                + character_start
+                                - window_character_start
+                            )
+                            local_character_end = (
+                                len(self.document_prefix)
+                                + character_end
+                                - window_character_start
+                            )
+                            local_start, local_end = _character_span_to_token_span(
+                                prepared_offsets,
+                                local_character_start,
+                                local_character_end,
+                            )
+                            pooled = token_embeddings[local_start:local_end].mean(
+                                dim=0
+                            )
+                            pooled = _apply_post_pooling_modules(model, pooled)
+                            state["output_vectors"][chunk_index] = np.asarray(
+                                pooled.detach().cpu().numpy(), dtype=np.float32
+                            )
 
-        if any(vector is None for vector in output_vectors):
-            raise RuntimeError("A contextual chunk span was not pooled")
-        return np.asarray(output_vectors, dtype=np.float32)
+        matrices: dict[str, FloatMatrix] = {}
+        for group_name, state in group_states.items():
+            output_vectors = state["output_vectors"]
+            if any(vector is None for vector in output_vectors):
+                raise RuntimeError(
+                    f"A contextual chunk span was not pooled for {group_name!r}"
+                )
+            matrices[group_name] = np.asarray(output_vectors, dtype=np.float32)
+        return matrices
 
 
 def _character_span_to_token_span(
