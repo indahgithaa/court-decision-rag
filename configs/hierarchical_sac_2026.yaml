@@ -1,0 +1,66 @@
+experiment:
+  id: hsac_indolaw_200_v1
+  seed: 42
+  status: exploratory_development
+  primary_endpoint: recall@5
+  methods: [B1, B2, M1]
+
+data:
+  manifest: experiments/indolaw_200_manifest.json
+  raw_dir: data/raw/indolaw_200
+  pages: data/processed/indolaw_200/corpus/pages.jsonl
+  sections: data/processed/indolaw_200/corpus/sections.jsonl
+  questions: data/evaluation/indolaw_200/corpus_questions.csv
+  workspace: experiments/hierarchical_sac_2026
+  derived_root: data/processed/hierarchical_sac_2026
+  index_root: vector_db/hierarchical_sac_2026
+  results_root: experiments/results/hierarchical_sac_2026
+
+chunking:
+  implementation: rcts-offset-v1
+  chunk_size_characters: 500
+  chunk_overlap_characters: 0
+  preferred_fill_ratio: 0.5
+  separators: ["\n\n", "\n", "!", "?", ".", ":", ";", ",", " ", ""]
+
+summarization:
+  model_id: Irvan14/t5-small-indonesian-summarization
+  model_revision: 65f2d2be6dac02a57444535aca909c5d4606de8a
+  backend: local_transformers_seq2seq
+  device: cpu
+  batch_size: 32
+  max_input_tokens: 512
+  max_new_tokens: 48
+  target_characters: 150
+  tolerance_characters: 20
+  short_section_characters: 170
+  document_section_characters: 320
+  sampling:
+    do_sample: false
+    num_beams: 1
+    no_repeat_ngram_size: 2
+    repetition_penalty: 2.5
+
+embedding:
+  model_id: intfloat/multilingual-e5-small
+  model_revision: 614241f622f53c4eeff9890bdc4f31cfecc418b3
+  onnx_export_revision: 8d923955b027282ba975c0a4c825486c9ca4c490
+  onnx_export_sha256: ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665
+  device: cpu
+  batch_size: 64
+  max_sequence_tokens: 512
+  passage_prefix: "passage: "
+  query_prefix: "query: "
+  normalize: true
+
+retrieval:
+  algorithm: exact_dense_matrix_search
+  similarity: cosine_on_l2_normalized_vectors
+  top_k_store: 50
+  evaluation_k: [1, 3, 5, 10, 20, 50]
+
+statistics:
+  cluster_unit: document_id
+  bootstrap_samples: 2000
+  permutation_samples: 10000
+  confidence_level: 0.95

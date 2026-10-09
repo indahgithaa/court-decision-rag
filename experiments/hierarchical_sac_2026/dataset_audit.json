@@ -1,0 +1,96 @@
+{
+  "generated_at_utc": "2026-10-09T09:41:56.901622+00:00",
+  "git_commit": "fc838ba3baae070765b05523d8bc775890c6d230",
+  "git_status_before_new_pipeline": "clean (observed before implementation)",
+  "source_format": "Indo-Law normalized XML",
+  "pdf_count": 0,
+  "xml_count": 200,
+  "manifest_document_count": 200,
+  "processed_document_count": 200,
+  "valid_raw_document_count": 200,
+  "malformed_xml": [],
+  "empty_documents": [],
+  "missing_files": [],
+  "integrity_errors": [],
+  "filename_issues": [],
+  "duplicate_content_groups": 0,
+  "duplicate_content_documents": 0,
+  "page_records": 200,
+  "section_records": 2154,
+  "section_distribution": {
+    "amar_putusan": 200,
+    "fakta": 200,
+    "fakta_hukum": 159,
+    "identitas_terdakwa": 200,
+    "kepala_putusan": 200,
+    "penutup": 199,
+    "pertimbangan_hukum": 200,
+    "riwayat_dakwaan": 200,
+    "riwayat_penahanan": 200,
+    "riwayat_perkara": 199,
+    "riwayat_tuntutan": 197
+  },
+  "sections_per_document_distribution": {
+    "9": 3,
+    "10": 40,
+    "11": 157
+  },
+  "missing_required_sections_by_label": {},
+  "structure_errors": [],
+  "document_text_characters": {
+    "total": 9283587,
+    "minimum": 19961,
+    "maximum": 124493,
+    "mean": 46417.935
+  },
+  "mojibake_marker_counts": {
+    "�": 0,
+    "Ã": 0,
+    "â€": 0,
+    "Â": 0
+  },
+  "ocr_assessment": "not applicable: active corpus is normalized XML, not OCR/PDF",
+  "pdf_integrity_assessment": "not executable: repository contains zero PDFs",
+  "qa": {
+    "question_count": 800,
+    "included_exploratory_count": 725,
+    "excluded_pending_review_count": 75,
+    "human_validated_count": 0,
+    "confirmatory_eligible_count": 0,
+    "target_section_distribution_all": {
+      "amar_putusan": 200,
+      "identitas_terdakwa": 194,
+      "pertimbangan_hukum": 200,
+      "riwayat_dakwaan": 200,
+      "riwayat_penahanan": 6
+    },
+    "target_section_distribution_included": {
+      "amar_putusan": 199,
+      "identitas_terdakwa": 122,
+      "pertimbangan_hukum": 199,
+      "riwayat_dakwaan": 199,
+      "riwayat_penahanan": 6
+    },
+    "automatic_flag_counts": {
+      "excessive_question_length": 4,
+      "field_label_as_answer": 26,
+      "implausibly_short_answer": 44,
+      "malformed_identity_question": 13
+    },
+    "annotation_origin": "deterministic rules over normalized XML; not human gold"
+  },
+  "historical_split": {
+    "development_documents": 40,
+    "holdout_documents": 160,
+    "status": "previously opened/reused; not an independent confirmatory holdout"
+  },
+  "available_local_models": [
+    "intfloat/multilingual-e5-small@614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "Irvan14/t5-small-indonesian-summarization@65f2d2be6dac02a57444535aca909c5d4606de8a",
+    "Qwen/Qwen2.5-0.5B-Instruct@7ae557604adf67be50417f59c2c2f167def9a775"
+  ],
+  "openai_api_key_available": false,
+  "corpus_sha256": "cd69c019986bf66f3fb7abfc50d99c952c5ffe24c5ed9563c51d48d798efa004",
+  "sections_sha256": "50f341977cc3cdc80c41d38370e1a289bff720542d04af62c11fd223a9701ddd",
+  "questions_sha256": "353814d429185bc68a1a9fa7d3a83074204c02aa2c87782273a4633854e1b378"
+}

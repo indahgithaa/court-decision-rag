@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "court-decision-rag"
 version = "0.1.0"
-description = "Research pipeline for structure-aware chunking of Indonesian court decisions"
+description = "Research pipeline for hierarchical summary-augmented retrieval on Indonesian court decisions"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,6 +17,11 @@ dependencies = [
 [project.optional-dependencies]
 retrieval = [
   "sentence-transformers>=3.0,<6.0",
+  "onnxruntime>=1.31,<2.0",
+]
+summarization = [
+  "transformers>=5.0,<6.0",
+  "torch>=2.0,<3.0",
 ]
 answer-evaluation = [
   "bert-score==0.3.13",

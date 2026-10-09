@@ -1,6 +1,15 @@
 import numpy as np
 import pytest
-import torch
+
+try:
+    import torch
+except OSError as exc:
+    if getattr(exc, "winerror", None) == 4551 or "Application Control policy" in str(exc):
+        pytest.skip(
+            "PyTorch DLL blocked by Windows Application Control; ONNX retrieval tests remain available",
+            allow_module_level=True,
+        )
+    raise
 
 from src.embedding.embedder import (
     ContextualSentenceTransformerEmbedder,
